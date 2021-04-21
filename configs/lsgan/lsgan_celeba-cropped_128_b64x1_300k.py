@@ -4,7 +4,7 @@ _base_ = [
     '../_base_/default_runtime.py'
 ]
 model = dict(
-    discriminator=dict(output_scale=1),
+    discriminator=dict(output_scale=4, out_channels=1),
     gan_loss=dict(type='GANLoss', gan_type='lsgan'))
 # define dataset
 # you must set `samples_per_gpu` and `imgs_root`
@@ -14,8 +14,7 @@ data = dict(
 
 optimizer = dict(
     generator=dict(type='Adam', lr=0.001, betas=(0.5, 0.99)),
-    discriminator=dict(
-        type='Adam', lr=0.0018823529411764706, betas=(0.5, 0.99)))
+    discriminator=dict(type='Adam', lr=0.001, betas=(0.5, 0.99)))
 
 # adjust running config
 lr_config = None
@@ -27,7 +26,17 @@ custom_hooks = [
         interval=10000)
 ]
 
-total_iters = 1000000
+evaluation = dict(
+    type='GenerativeEvalHook',
+    interval=10000,
+    metrics=dict(
+        type='FID',
+        num_images=50000,
+        inception_pkl='path_to_inception_pkl',
+        bgr2rgb=True),
+    sample_kwargs=dict(sample_model='orig'))
+
+total_iters = 160000
 # use ddp wrapper for faster training
 use_ddp_wrapper = True
 find_unused_parameters = False
