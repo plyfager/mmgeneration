@@ -1,4 +1,4 @@
-from .augmentation import Flip, NumpyPad, Resize
+from .augmentation import Flip, NumpyPad, RandomImgNoise, Resize
 from .compose import Compose
 from .crop import Crop, FixedCrop
 from .formatting import Collect, ImageToTensor, ToTensor
@@ -13,6 +13,7 @@ __all__ = [
     'ToTensor',
     'Flip',
     'Resize',
+    'RandomImgNoise',
     'Normalize',
     'NumpyPad',
     'Crop',

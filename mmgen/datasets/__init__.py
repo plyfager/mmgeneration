@@ -3,7 +3,8 @@ from .dataset_wrappers import RepeatDataset
 from .grow_scale_image_dataset import GrowScaleImgDataset
 from .paired_image_dataset import PairedImageDataset
 from .pipelines import (Collect, Compose, Flip, ImageToTensor,
-                        LoadImageFromFile, Normalize, Resize, ToTensor)
+                        LoadImageFromFile, Normalize, RandomImgNoise, Resize,
+                        ToTensor)
 from .quick_test_dataset import QuickTestImageDataset
 from .samplers import DistributedSampler
 from .singan_dataset import SinGANDataset
@@ -11,7 +12,7 @@ from .unconditional_image_dataset import UnconditionalImageDataset
 from .unpaired_image_dataset import UnpairedImageDataset
 
 __all__ = [
-    'build_dataloader', 'build_dataset', 'LoadImageFromFile',
+    'build_dataloader', 'build_dataset', 'LoadImageFromFile', 'RandomImgNoise',
     'DistributedSampler', 'UnconditionalImageDataset', 'Compose', 'ToTensor',
     'ImageToTensor', 'Collect', 'Flip', 'Resize', 'RepeatDataset', 'Normalize',
     'GrowScaleImgDataset', 'SinGANDataset', 'PairedImageDataset',

@@ -1,5 +1,6 @@
 import mmcv
 import numpy as np
+from mmcls.datasets import PIPELINES as CLS_PIPELINE
 
 from ..builder import PIPELINES
 
@@ -255,4 +256,65 @@ class NumpyPad:
         repr_str += (
             f'(keys={self.keys}, padding={self.padding}, kwargs={self.kwargs})'
         )
+        return repr_str
+
+
+@CLS_PIPELINE.register_module()
+@PIPELINES.register_module()
+class RandomImgNoise:
+    """Add random noise with specific distribution and range to the input
+    image.
+
+    Args:
+        keys (list[str]): The images to be added random noise.
+        lower_bound (float, optional): The lower bound of the noise.
+            Default to ``0.``.
+        upper_bound (float, optional): The upper bound of the noise.
+            Default to ``1 / 128.``.
+        distribution (str, optional): The probability distribution of the
+            noise. Default to 'uniform'.
+    """
+
+    def __init__(self,
+                 keys,
+                 lower_bound=0,
+                 upper_bound=1 / 128.,
+                 distribution='uniform'):
+        self.keys = keys
+        self.lower_bound = lower_bound
+        self.upper_bound = upper_bound
+        self.distribution = distribution
+
+    def __call__(self, results):
+        """Call function.
+
+        Args:
+            results (dict): A dict containing the necessary information and
+                data for augmentation.
+
+        Returns:
+            dict: A dict containing the processed data and information.
+        """
+        if self.distribution == 'uniform':
+            dist_fn = np.random.rand
+        elif self.distribution == 'normal':
+            dist_fn = np.random.randn
+        else:
+            raise KeyError('Only support \'uniform\' distribution and '
+                           '\'normal\' distribution, receive '
+                           f'{self.distribution}.')
+
+        for k in self.keys:
+            img_size = results[k].shape
+            noise = dist_fn(*img_size)
+            noise = noise * (self.upper_bound -
+                             self.lower_bound) + self.lower_bound
+            results[k] += noise
+
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += (f'(keys={self.keys}, lower_bound={self.lower_bound}, '
+                     f'upper_bound={self.upper_bound})')
         return repr_str
