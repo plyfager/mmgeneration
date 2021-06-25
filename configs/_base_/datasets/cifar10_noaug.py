@@ -1,19 +1,16 @@
 dataset_type = 'mmcls.CIFAR10'
 
-# cifar dataset without augmentation
 # different from mmcls, we adopt the setting used in BigGAN
 # Note that the pipelines below are from MMClassification. Importantly, the
 # `to_rgb` is set to `True` to convert image to BGR orders. The default order
 # in Cifar10 is RGB. Thus, we have to convert it to BGR.
 
-# Follow the pipeline in
-# https://github.com/pfnet-research/sngan_projection/blob/master/datasets/cifar10.py
-# Only `RandomImageNoise` augmentation is adopted.
+# Cifar dataset w/o augmentations. Remove `RandomFlip` and `RandomCrop`
+# augmentations.
 img_norm_cfg = dict(
     mean=[127.5, 127.5, 127.5], std=[127.5, 127.5, 127.5], to_rgb=True)
 train_pipeline = [
     dict(type='Normalize', **img_norm_cfg),
-    dict(type='RandomImgNoise', keys=['img']),
     dict(type='ImageToTensor', keys=['img']),
     dict(type='ToTensor', keys=['gt_label']),
     dict(type='Collect', keys=['img', 'gt_label'])
