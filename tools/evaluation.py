@@ -10,7 +10,7 @@ from mmcv.runner import get_dist_info, init_dist, load_checkpoint
 from mmgen.apis import set_random_seed
 from mmgen.core import (build_metric, single_gpu_evaluation,
                         single_gpu_online_evaluation)
-from mmgen.datasets import build_dataloader, build_dataset
+from mmgen.datasets import build_dataloader
 from mmgen.models import build_model
 from mmgen.utils import get_root_logger
 
@@ -149,18 +149,24 @@ def main():
         else:
             basic_table_info['num_samples'] = -1
             # build the dataloader
-            if cfg.data.get('test', None) and cfg.data.test.get(
-                    'imgs_root', None):
-                dataset = build_dataset(cfg.data.test)
-            elif cfg.data.get('val', None) and cfg.data.val.get(
-                    'imgs_root', None):
-                dataset = build_dataset(cfg.data.val)
+            if cfg.data.get('test', None) \
+                and (cfg.data.test.get('imgs_root', None) or
+                     cfg.data.test.get('data_prefix', None)):
+                data_cfg = cfg.data.test
+            elif cfg.data.get('val', None) \
+                and (cfg.data.val.get('imgs_root', None) or
+                     cfg.data.val.get('data_prefix', None)):
+                data_cfg = cfg.data.val
             elif cfg.data.get('train', None):
                 # we assume that the train part should work well
-                dataset = build_dataset(cfg.data.train)
+                data_cfg = cfg.data.train
             else:
                 raise RuntimeError('There is no valid dataset config to run, '
                                    'please check your dataset configs.')
+
+            dataset = build_dataloader(data_cfg)
+            mmcv.print_log(f'Dataset pipeline: {data_cfg}', 'mmgen')
+
             data_loader = build_dataloader(
                 dataset,
                 samples_per_gpu=args.batch_size,
