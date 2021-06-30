@@ -10,7 +10,7 @@ from mmcv.runner import get_dist_info, init_dist, load_checkpoint
 from mmgen.apis import set_random_seed
 from mmgen.core import (build_metric, single_gpu_evaluation,
                         single_gpu_online_evaluation)
-from mmgen.datasets import build_dataloader
+from mmgen.datasets import build_dataloader, build_dataset
 from mmgen.models import build_model
 from mmgen.utils import get_root_logger
 
@@ -164,7 +164,7 @@ def main():
                 raise RuntimeError('There is no valid dataset config to run, '
                                    'please check your dataset configs.')
 
-            dataset = build_dataloader(data_cfg)
+            dataset = build_dataset(data_cfg)
             mmcv.print_log(f'Dataset pipeline: {data_cfg}', 'mmgen')
 
             data_loader = build_dataloader(
