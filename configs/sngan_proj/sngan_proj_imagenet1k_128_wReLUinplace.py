@@ -16,7 +16,6 @@ model = dict(
         init_cfg=dict(type='BigGAN')))
 
 n_disc = 2
-
 lr_config = None
 
 checkpoint_config = dict(interval=50000, by_epoch=False, max_keep_ckpts=20)
@@ -27,9 +26,8 @@ custom_hooks = [
         interval=1000)
 ]
 
-# TODO:
 inception_pkl = \
-    './work_dirs/inception_pkl/cifar10_rgb_train_noshuffle_tero.pkl'
+    './work_dirs/inception_pkl/imagenet.pkl'
 
 evaluation = dict(
     type='GenerativeEvalHook',

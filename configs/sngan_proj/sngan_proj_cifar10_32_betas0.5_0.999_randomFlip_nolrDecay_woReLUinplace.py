@@ -11,6 +11,7 @@ model = dict(
     generator=dict(num_classes=num_classes),
     discriminator=dict(num_classes=num_classes))
 
+n_disc = 5
 lr_config = None
 checkpoint_config = dict(interval=10000, by_epoch=False, max_keep_ckpts=20)
 custom_hooks = [
@@ -21,7 +22,7 @@ custom_hooks = [
 ]
 
 inception_pkl = \
-    './work_dirs/inception_pkl/cifar10_train_noshuffle_tero.pkl'
+    './work_dirs/inception_pkl/cifar10.pkl'
 
 evaluation = dict(
     type='GenerativeEvalHook',
@@ -38,7 +39,7 @@ evaluation = dict(
     best_metric=['fid', 'is'],
     sample_kwargs=dict(sample_model='orig'))
 
-total_iters = 100000 * 5
+total_iters = 100000 * n_disc
 # use ddp wrapper for faster training
 use_ddp_wrapper = True
 find_unused_parameters = False

@@ -14,8 +14,8 @@ _base_ = [
 
 num_classes = 10
 model = dict(
-    generator=dict(num_classes=num_classes, init_cfg=dict(type='chainer')),
-    discriminator=dict(num_classes=num_classes, init_cfg=dict(type='chainer')))
+    generator=dict(num_classes=num_classes, init_cfg=dict(type='sngan')),
+    discriminator=dict(num_classes=num_classes, init_cfg=dict(type='sngan')))
 
 n_disc = 5
 lr_config = dict(
@@ -30,7 +30,7 @@ custom_hooks = [
 ]
 
 inception_pkl = \
-    './work_dirs/inception_pkl/cifar10_rgb_train_noshuffle_tero.pkl'
+    './work_dirs/inception_pkl/cifar10.pkl'
 
 evaluation = dict(
     type='GenerativeEvalHook',

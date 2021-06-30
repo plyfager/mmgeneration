@@ -18,7 +18,6 @@ model = dict(
     discriminator=dict(num_classes=num_classes, init_cfg=dict(type='sngan')))
 
 n_disc = 5
-
 lr_config = dict(
     policy='Linear',
     target_lr=0,
@@ -34,9 +33,8 @@ custom_hooks = [
         interval=1000)
 ]
 
-# TODO:
 inception_pkl = \
-    './work_dirs/inception_pkl/cifar10_rgb_train_noshuffle_tero.pkl'
+    './work_dirs/inception_pkl/imagenet.pkl'
 
 evaluation = dict(
     type='GenerativeEvalHook',
