@@ -9,8 +9,7 @@ _base_ = [
 init_cfg = dict(type='SAGAN')
 model = dict(
     generator=dict(num_classes=1000, init_cfg=init_cfg, auto_sync_bn=False),
-    discriminator=dict(
-        num_classes=1000, init_cfg=init_cfg, auto_sync_bn=False))
+    discriminator=dict(num_classes=1000, init_cfg=init_cfg))
 
 lr_config = None
 checkpoint_config = dict(interval=10000, by_epoch=False, max_keep_ckpts=20)
