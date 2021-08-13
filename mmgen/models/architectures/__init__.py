@@ -1,3 +1,4 @@
+from .agilegan import VAEStyleEncoder
 from .biggan import BigGANGenerator, SNConvModule
 from .cyclegan import ResnetGenerator
 from .dcgan import DCGANDiscriminator, DCGANGenerator
@@ -31,5 +32,5 @@ __all__ = [
     'generation_init_weights', 'PatchDiscriminator', 'ResnetGenerator',
     'PerceptualLoss', 'WGANGPDiscriminator', 'WGANGPGenerator',
     'LSGANDiscriminator', 'LSGANGenerator', 'ProjDiscriminator',
-    'SNGANGenerator', 'BigGANGenerator', 'SNConvModule'
+    'SNGANGenerator', 'BigGANGenerator', 'SNConvModule', 'VAEStyleEncoder'
 ]

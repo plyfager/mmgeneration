@@ -206,6 +206,7 @@ class StyleGANv2Generator(nn.Module):
                                  torch.randn(*shape))
 
         if pretrained is not None:
+            print(pretrained)
             self._load_pretrained_model(**pretrained)
 
     def _load_pretrained_model(self,
