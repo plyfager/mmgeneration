@@ -5,7 +5,7 @@ import numpy as np
 import torch.nn.functional as F
 from torch import nn
 import math
-from mmgen.models.architectures import EqualizedLRLinearModule
+from ..pggan.modules import EqualizedLRLinearModule
 
 class Flatten(Module):
 	def forward(self, input):
