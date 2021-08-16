@@ -6,7 +6,7 @@ _base_ = [
 # define dataset
 # you must set `samples_per_gpu`
 # `samples_per_gpu` and `imgs_root` need to be set.
-imgs_root = 'data/celebahq'
+imgs_root = 'data/imgs_256'
 data = dict(
     samples_per_gpu=16,
     workers_per_gpu=4,
