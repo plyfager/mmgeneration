@@ -13,4 +13,6 @@ model = dict(
 train_cfg = None
 test_cfg = None
 optimizer = dict(
-    encoder=dict(type='RAdam', lr=0.001, betas=(0.0, 0.999)))
+    encoder=dict(type='Adam', lr=0.001, betas=(0.0, 0.999)))
+# optimizer = dict(
+    # encoder=dict(type='RAdam', lr=0.001, betas=(0.0, 0.999)))
