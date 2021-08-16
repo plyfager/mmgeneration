@@ -65,7 +65,8 @@ class AgileEncoder(nn.Module):
     def train_step(self,
                    data_batch,
                    optimizer,
-                   ddp_reducer=None):
+                   ddp_reducer=None,
+                   running_status=None):
         # get data from data_batch
         real_imgs = data_batch[self.real_img_key]
         # If you adopt ddp, this batch size is local batch size for each GPU.
