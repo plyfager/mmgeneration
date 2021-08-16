@@ -10,7 +10,7 @@ imgs_root = 'data/celebahq'
 data = dict(
     samples_per_gpu=16,
     workers_per_gpu=4,
-    train=dict(type=dataset_type, imgs_root=imgs_root, pipeline=train_pipeline))
+    train=dict(imgs_root=imgs_root))
 
 # adjust running config
 lr_config = None
