@@ -1,10 +1,6 @@
-<<<<<<< HEAD
 from .agilegan import VAEStyleEncoder
-from .biggan import BigGANGenerator, SNConvModule
-=======
 from .biggan import (BigGANDeepDiscriminator, BigGANDeepGenerator,
                      BigGANDiscriminator, BigGANGenerator, SNConvModule)
->>>>>>> cd89c81b16cf48e87c0881f8083c8538c75f4d35
 from .cyclegan import ResnetGenerator
 from .dcgan import DCGANDiscriminator, DCGANGenerator
 from .fid_inception import InceptionV3
