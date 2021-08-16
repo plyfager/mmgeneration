@@ -13,5 +13,5 @@ model = dict(
 train_cfg = None
 test_cfg = None
 optimizer = dict(
-    generator=dict(type='Adam', lr=0.0002, betas=(0.0, 0.999)),
-    discriminator=dict(type='Adam', lr=0.0002, betas=(0.0, 0.999)))
+    encoder=dict(type='RAdam', lr=0.001, betas=(0.0, 0.999)),
+    decoder=dict(type='RAdam', lr=0.001, betas=(0.0, 0.999)))
