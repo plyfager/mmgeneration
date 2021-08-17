@@ -5,9 +5,11 @@ from .disc_auxiliary_loss import (DiscShiftLoss, GradientPenaltyLoss,
 from .gan_loss import GANLoss
 from .gen_auxiliary_loss import GeneratorPathRegularizer, gen_path_regularizer
 from .pixelwise_loss import L1Loss, MSELoss
+from .id_loss import IDLoss
 
 __all__ = [
     'GANLoss', 'DiscShiftLoss', 'disc_shift_loss', 'gradient_penalty_loss',
     'GradientPenaltyLoss', 'R1GradientPenalty', 'r1_gradient_penalty_loss',
-    'GeneratorPathRegularizer', 'gen_path_regularizer', 'MSELoss', 'L1Loss'
+    'GeneratorPathRegularizer', 'gen_path_regularizer', 'MSELoss', 'L1Loss',
+    'IDLoss'
 ]

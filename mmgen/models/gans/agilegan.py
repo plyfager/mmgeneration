@@ -12,12 +12,19 @@ from ..common import set_requires_grad
 from .base_gan import BaseGAN
 from collections import OrderedDict
 import torch.distributed as dist
-
+import torch.nn.functional as F
 
 @MODELS.register_module()
 class AgileEncoder(nn.Module):
-    def __init__(self, encoder, decoder, loss=None, train_cfg=None,
-                 test_cfg=None,pretrained=None):
+    def __init__(self, 
+                 encoder, 
+                 decoder, 
+                 id_loss=None, 
+                 perceptual_loss=None,
+                 kl_loss=None,
+                 train_cfg=None,
+                 test_cfg=None,
+                 pretrained=None):
         super().__init__()
         self._encoder_cfg = deepcopy(encoder)
         self.encoder = build_module(encoder)
@@ -33,12 +40,13 @@ class AgileEncoder(nn.Module):
             
         ## loss settings
         self.rec_loss = nn.MSELoss()
-        self.id_loss = None
-        self.perceptual_loss = None
-        self.kl_loss = None
+        if id_loss is not None:
+            self.id_loss = build_module(id_loss)
+        if perceptual_loss is not None:
+            self.perceptual_loss = build_module(perceptual_loss)
+        if kl_loss is not None:
+            self.kl_loss = build_module(kl_loss)
         
-
-            
     def _parse_train_cfg(self):
         """Parsing train config and set some attributes for training."""
         if self.train_cfg is None:
@@ -125,7 +133,7 @@ class AgileEncoder(nn.Module):
             img_gen = img_gen.mean([3, 5])
         # inversion loss
         losses_dict['rec_loss'] = self.rec_loss(outputs_dict["real_imgs"], img_gen)
-        # losses_dict['id_loss'] = self.id_loss(outputs_dict["real_imgs"],outputs_dict["restore_imgs"])
+        losses_dict['id_loss'] = self.id_loss(outputs_dict["real_imgs"], img_gen)
         # losses_dict['perceptual_loss'] = self.perceptual_loss(outputs_dict["real_imgs"],outputs_dict["restore_imgs"])
         # losses_dict['kl_loss'] = self.kl_loss(outputs_dict["logvar"],outputs_dict["mu"])
 
@@ -187,10 +195,14 @@ class AgileEncoder(nn.Module):
         loss_encoder.backward()
         optimizer['encoder'].step()
 
+        # Add downsampled images
+        downsample_imgs = F.interpolate(restore_imgs, (256,256))
+        
         # skip generator training if only train discriminator for current
         # iteration
         if (curr_iter + 1) % self.disc_steps != 0:
             results = dict(
+                downsample_imgs=downsample_imgs.cpu(),
                 restore_imgs=restore_imgs.cpu(), real_imgs=real_imgs.cpu())
             outputs = dict(
                 log_vars=log_vars_encoder,
@@ -203,7 +215,7 @@ class AgileEncoder(nn.Module):
         log_vars = {}
         log_vars.update(log_vars_encoder)
 
-        results = dict(restore_imgs=restore_imgs.cpu(), real_imgs=real_imgs.cpu())
+        results = dict(downsample_imgs=downsample_imgs.cpu(),restore_imgs=restore_imgs.cpu(), real_imgs=real_imgs.cpu())
         outputs = dict(
             log_vars=log_vars, num_samples=batch_size, results=results)
 

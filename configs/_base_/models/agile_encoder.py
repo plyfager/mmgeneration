@@ -1,4 +1,5 @@
 ckpt_path = "work_dirs/pre-trained/stylegan2_c2_ffhq_1024_b4x8_20210407_150045-618c9024.pth"
+facenet_path="work_dirs/pre-trained/model_ir_se50.pth"
 # ckpt_path = "work_dirs/pre-trained/stylegan2_c2_ffhq_256_b4x8_20210407_160709-7890ae1f.pth"
 prefix='generator'
 model = dict(
@@ -9,7 +10,9 @@ model = dict(
                  pretrained=dict(
                      ckpt_path = ckpt_path, 
                      prefix=prefix)),
-    loss=None)
+    id_loss=dict(type="IDLoss",model_path=facenet_path), 
+    perceptual_loss=None,
+    kl_loss=None)
 
 train_cfg = None
 test_cfg = None

@@ -19,8 +19,8 @@ custom_hooks = [
     dict(
         type='MMGenVisualizationHook',
         output_dir='training_samples',
-        res_name_list=['real_imgs','restore_imgs'],
-        interval=500)
+        res_name_list=['real_imgs','downsample_imgs'],
+        interval=100)
 ]
 log_config = dict(
     interval=100,
