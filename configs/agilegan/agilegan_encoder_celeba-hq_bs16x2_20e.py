@@ -14,23 +14,21 @@ data = dict(
 
 # adjust running config
 lr_config = None
-checkpoint_config = dict(interval=5000, by_epoch=False, max_keep_ckpts=20)
+checkpoint_config = dict(interval=1, by_epoch=False, max_keep_ckpts=20)
 custom_hooks = [
     dict(
         type='VisualizeUnconditionalSamples',
         output_dir='training_samples',
-        interval=1),
-    # dict(
-    #     type='ExponentialMovingAverageHook',
-    #     module_keys=('generator_ema', ),
-    #     interval=4,
-    #     start_iter=4000,
-    #     interp_cfg=dict(momentum=0.9999),
-    #     priority='VERY_HIGH')
+        interval=1)
 ]
-
+log_config = dict(
+    interval=1,
+    hooks=[
+        dict(type='TextLoggerHook')
+    ])
 # 30000 images in celeba-hq
-total_iters = 18750
+total_iters = 10
+# total_iters = 18750
 
 # use ddp wrapper for faster training
 use_ddp_wrapper = True
