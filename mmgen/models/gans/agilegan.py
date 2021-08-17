@@ -30,7 +30,7 @@ class AgileEncoder(nn.Module):
             self._parse_test_cfg()
             
         ## loss settings
-        self.rec_loss = MSELoss()
+        self.rec_loss = nn.MSELoss()
             
     def _parse_train_cfg(self):
         """Parsing train config and set some attributes for training."""
