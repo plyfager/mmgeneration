@@ -17,8 +17,9 @@ lr_config = None
 checkpoint_config = dict(interval=1, by_epoch=False, max_keep_ckpts=20)
 custom_hooks = [
     dict(
-        type='VisualizeUnconditionalSamples',
+        type='MMGenVisualizationHook',
         output_dir='training_samples',
+        res_name_list=['real_imgs','restore_imgs'],
         interval=1)
 ]
 log_config = dict(

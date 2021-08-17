@@ -33,6 +33,11 @@ class AgileEncoder(nn.Module):
             
         ## loss settings
         self.rec_loss = nn.MSELoss()
+        self.id_loss = None
+        self.perceptual_loss = None
+        self.kl_loss = None
+        
+
             
     def _parse_train_cfg(self):
         """Parsing train config and set some attributes for training."""
