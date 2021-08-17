@@ -1,7 +1,11 @@
 dataset_type = 'UnconditionalImageDataset'
 
 train_pipeline = [
-    dict(type='LoadImageFromFile', key='real_img', io_backend='disk'),
+    dict(type='LoadImageFromFile',
+        key='real_img',
+        io_backend='memcached',
+        server_list_cfg='/mnt/lustre/share/memcached_client/server_list.conf',
+        client_cfg='/mnt/lustre/share/memcached_client/client.conf'),
     dict(type='Resize', keys=['real_img'], scale=(256, 256)),
     dict(type='Flip', keys=['real_img'], direction='horizontal'),
     dict(

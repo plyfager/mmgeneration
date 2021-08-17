@@ -14,22 +14,21 @@ data = dict(
 
 # adjust running config
 lr_config = None
-checkpoint_config = dict(interval=1, by_epoch=False, max_keep_ckpts=20)
+checkpoint_config = dict(interval=1000, by_epoch=False, max_keep_ckpts=20)
 custom_hooks = [
     dict(
         type='MMGenVisualizationHook',
         output_dir='training_samples',
         res_name_list=['real_imgs','restore_imgs'],
-        interval=1)
+        interval=500)
 ]
 log_config = dict(
-    interval=1,
+    interval=100,
     hooks=[
         dict(type='TextLoggerHook')
     ])
 # 30000 images in celeba-hq
-total_iters = 10
-# total_iters = 18750
+total_iters = 19000
 
 # use ddp wrapper for faster training
 use_ddp_wrapper = True
