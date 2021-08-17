@@ -220,7 +220,8 @@ class IDLoss(nn.Module):
 
     def forward(self, src_x, rec_x):
         n_samples = src_x.shape[0]
-        src_feats = self.extract_feats(src_x)  # Otherwise use the feature from there
+        with torch.no_grad():
+        	src_feats = self.extract_feats(src_x)
         rec_feats = self.extract_feats(rec_x)
         src_feats = src_feats.detach()
         loss = 0
