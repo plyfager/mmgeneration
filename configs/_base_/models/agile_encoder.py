@@ -10,7 +10,8 @@ model = dict(
                  pretrained=dict(
                      ckpt_path = ckpt_path, 
                      prefix=prefix)),
-    id_loss=dict(type="IDLoss",model_path=facenet_path), 
+    # id_loss=dict(type="IDLoss",model_path=facenet_path,loss_weight=0.), 
+    id_loss=None, 
     perceptual_loss=None,
     kl_loss=None)
 

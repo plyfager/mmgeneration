@@ -204,13 +204,14 @@ def IR_SE_152(input_size):
 
 @MODULES.register_module()
 class IDLoss(nn.Module):
-    def __init__(self, model_path=None):
+    def __init__(self, model_path=None, loss_weight=0.8):
         super().__init__()
         print('Loading ResNet ArcFace')
         self.facenet = Backbone(input_size=112, num_layers=50, drop_ratio=0.6, mode='ir_se')
         self.facenet.load_state_dict(torch.load(model_path))
         self.face_pool = torch.nn.AdaptiveAvgPool2d((112, 112))
         self.facenet.eval()
+        self.loss_weight = loss_weight
 
     def extract_feats(self, x):
         x = x[:, :, 35:223, 32:220]  # Crop interesting region
@@ -231,4 +232,4 @@ class IDLoss(nn.Module):
             loss += 1 - diff_target
             count += 1
 
-        return loss / count
+        return self.loss_weight * loss / count
