@@ -11,6 +11,7 @@ from mmgen.models.misc import tensor2img
 from ..common import set_requires_grad
 from .base_gan import BaseGAN
 from collections import OrderedDict
+import torch.distributed as dist
 
 
 @MODELS.register_module()
