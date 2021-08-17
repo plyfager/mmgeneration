@@ -10,6 +10,7 @@ from mmgen.models.builder import MODELS, build_module
 from mmgen.models.misc import tensor2img
 from ..common import set_requires_grad
 from .base_gan import BaseGAN
+from collections import OrderedDict
 
 
 @MODELS.register_module()
