@@ -107,17 +107,8 @@ class AgileEncoder(nn.Module):
         # items without 'loss' in their name will just be used to print
         # information.
         losses_dict = {}
-        # inversion loss
-        data_dict_ = dict(
-            encoder=self.encoder,
-            decoder=self.decoder,
-            logvar=logvar,
-            mu=mu,
-            restore_imgs=restore_imgs,
-            real_imgs=real_imgs,
-            iteration=curr_iter,
-            batch_size=batch_size)
         
+        # inversion loss
         losses_dict['rec_loss'] = self.rec_loss(outputs_dict["real_imgs"], outputs_dict["restore_imgs"])
         # losses_dict['id_loss'] = self.id_loss(outputs_dict["real_imgs"],outputs_dict["restore_imgs"])
         # losses_dict['perceptual_loss'] = self.perceptual_loss(outputs_dict["real_imgs"],outputs_dict["restore_imgs"])

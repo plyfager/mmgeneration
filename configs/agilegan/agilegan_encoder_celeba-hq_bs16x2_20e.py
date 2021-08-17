@@ -29,6 +29,7 @@ custom_hooks = [
     #     priority='VERY_HIGH')
 ]
 
+# 30000 images in celeba-hq
 total_iters = 18750
 
 # use ddp wrapper for faster training
