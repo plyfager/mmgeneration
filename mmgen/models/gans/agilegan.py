@@ -29,6 +29,9 @@ class AgileEncoder(nn.Module):
         if test_cfg is not None:
             self._parse_test_cfg()
             
+        ## loss settings
+        self.rec_loss = MSELoss()
+            
     def _parse_train_cfg(self):
         """Parsing train config and set some attributes for training."""
         if self.train_cfg is None:
@@ -55,12 +58,80 @@ class AgileEncoder(nn.Module):
         # whether to use exponential moving average for testing
         self.use_ema = self.test_cfg.get('use_ema', False)
         # TODO: finish ema part
+    
+    def _parse_losses(self, losses):
+        """Parse the raw outputs (losses) of the network.
+
+        Args:
+            losses (dict): Raw output of the network, which usually contain
+                losses and other necessary infomation.
+
+        Returns:
+            tuple[Tensor, dict]: (loss, log_vars), loss is the loss tensor \
+                which may be a weighted sum of all losses, log_vars contains \
+                all the variables to be sent to the logger.
+        """
+        log_vars = OrderedDict()
+        for loss_name, loss_value in losses.items():
+            if isinstance(loss_value, torch.Tensor):
+                log_vars[loss_name] = loss_value.mean()
+            elif isinstance(loss_value, list):
+                log_vars[loss_name] = sum(_loss.mean() for _loss in loss_value)
+            # Allow setting None for some loss item.
+            # This is to support dynamic loss module, where the loss is
+            # calculated with a fixed frequency.
+            elif loss_value is None:
+                continue
+            else:
+                raise TypeError(
+                    f'{loss_name} is not a tensor or list of tensors')
+
+        # Note that you have to add 'loss' in name of the items that will be
+        # included in back propagation.
+        loss = sum(_value for _key, _value in log_vars.items()
+                   if 'loss' in _key)
+
+        log_vars['loss'] = loss
+        for loss_name, loss_value in log_vars.items():
+            # reduce loss when distributed training
+            if dist.is_available() and dist.is_initialized():
+                loss_value = loss_value.data.clone()
+                dist.all_reduce(loss_value.div_(dist.get_world_size()))
+            log_vars[loss_name] = loss_value.item()
+
+        return loss, log_vars
+    
+    def _get_encoder_loss(self, outputs_dict):
+        # Construct losses dict. If you hope some items to be included in the
+        # computational graph, you have to add 'loss' in its name. Otherwise,
+        # items without 'loss' in their name will just be used to print
+        # information.
+        losses_dict = {}
+        # inversion loss
+        data_dict_ = dict(
+            encoder=self.encoder,
+            decoder=self.decoder,
+            logvar=logvar,
+            mu=mu,
+            restore_imgs=restore_imgs,
+            real_imgs=real_imgs,
+            iteration=curr_iter,
+            batch_size=batch_size)
         
+        losses_dict['rec_loss'] = self.rec_loss(outputs_dict["real_imgs"], outputs_dict["restore_imgs"])
+        # losses_dict['id_loss'] = self.id_loss(outputs_dict["real_imgs"],outputs_dict["restore_imgs"])
+        # losses_dict['perceptual_loss'] = self.perceptual_loss(outputs_dict["real_imgs"],outputs_dict["restore_imgs"])
+        # losses_dict['kl_loss'] = self.kl_loss(outputs_dict["logvar"],outputs_dict["mu"])
+
+        loss, log_var = self._parse_losses(losses_dict)
+
+        return loss, log_var
+
     def forward(self, x):
-        code, _, _ = self.encoder(x)
+        code, logvar, mu = self.encoder(x)
         code = code.unbind(dim=1)
         rec_x = self.decoder(code, input_is_latent=True)
-        return rec_x
+        return rec_x, logvar, mu
     
     def train_step(self,
                    data_batch,
@@ -87,42 +158,36 @@ class AgileEncoder(nn.Module):
         set_requires_grad(self.decoder, False)
         optimizer['encoder'].zero_grad()
         # TODO: add noise sampler to customize noise sampling
-        with torch.no_grad():
-            restore_imgs = self.forward(real_imgs)
-
-        # disc pred for fake imgs and real_imgs
-        disc_pred_fake = self.discriminator(fake_imgs)
-        disc_pred_real = self.discriminator(real_imgs)
+        restore_imgs, logvar, mu = self.forward(real_imgs)
         # get data dict to compute losses for disc
         data_dict_ = dict(
-            gen=self.generator,
-            disc=self.discriminator,
-            disc_pred_fake=disc_pred_fake,
-            disc_pred_real=disc_pred_real,
-            fake_imgs=fake_imgs,
+            encoder=self.encoder,
+            decoder=self.decoder,
+            logvar=logvar,
+            mu=mu,
+            restore_imgs=restore_imgs,
             real_imgs=real_imgs,
             iteration=curr_iter,
-            batch_size=batch_size,
-            loss_scaler=loss_scaler)
+            batch_size=batch_size)
 
-        loss_disc, log_vars_disc = self._get_disc_loss(data_dict_)
+        loss_encoder, log_vars_encoder = self._get_encoder_loss(data_dict_)
 
         # prepare for backward in ddp. If you do not call this function before
         # back propagation, the ddp will not dynamically find the used params
         # in current computation.
         if ddp_reducer is not None:
-            ddp_reducer.prepare_for_backward(_find_tensors(loss_disc))
+            ddp_reducer.prepare_for_backward(_find_tensors(loss_encoder))
 
-        loss_disc.backward()
-        optimizer['discriminator'].step()
+        loss_encoder.backward()
+        optimizer['encoder'].step()
 
         # skip generator training if only train discriminator for current
         # iteration
         if (curr_iter + 1) % self.disc_steps != 0:
             results = dict(
-                fake_imgs=fake_imgs.cpu(), real_imgs=real_imgs.cpu())
+                restore_imgs=restore_imgs.cpu(), real_imgs=real_imgs.cpu())
             outputs = dict(
-                log_vars=log_vars_disc,
+                log_vars=log_vars_encoder,
                 num_samples=batch_size,
                 results=results)
             if hasattr(self, 'iteration'):
@@ -132,7 +197,7 @@ class AgileEncoder(nn.Module):
         log_vars = {}
         log_vars.update(log_vars_encoder)
 
-        results = dict(fake_imgs=fake_imgs.cpu(), real_imgs=real_imgs.cpu())
+        results = dict(restore_imgs=restore_imgs.cpu(), real_imgs=real_imgs.cpu())
         outputs = dict(
             log_vars=log_vars, num_samples=batch_size, results=results)
 
