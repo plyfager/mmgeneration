@@ -10,10 +10,20 @@ model = dict(
                  pretrained=dict(
                      ckpt_path = ckpt_path, 
                      prefix=prefix)),
-    # id_loss=dict(type="IDLoss",model_path=facenet_path,loss_weight=0.), 
-    id_loss=None, 
-    perceptual_loss=None,
-    kl_loss=None)
+    id_loss=dict(type="IDLoss",model_path=facenet_path, loss_weight=0.8), 
+    perceptual_loss=dict(
+        type='PerceptualLoss',
+        vgg_type='vgg16',
+        layer_weights={
+            '4': 1.,
+            '9': 1.,
+            '16': 1.,
+            '23': 1.,
+            '30': 1.,
+        },
+        perceptual_weight=0.8,
+        pretrained=('torchvision://vgg16')),
+    kl_loss=dict(type="KLloss", loss_weight=5e-4))
 
 train_cfg = None
 test_cfg = None
