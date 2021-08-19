@@ -26,7 +26,7 @@ custom_hooks = [
         interval=100)
 ]
 log_config = dict(
-    interval=100,
+    interval=1,
     hooks=[
         dict(type='TextLoggerHook')
     ])
