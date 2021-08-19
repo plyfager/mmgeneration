@@ -150,7 +150,7 @@ class PerceptualLoss(nn.Module):
                 f'{criterion} criterion has not been supported in'
                 ' this version.')
 
-    def forward(self, x, gt):
+    def forward(self, gt, x):
         """Forward function.
 
         Args:
