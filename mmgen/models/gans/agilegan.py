@@ -134,8 +134,8 @@ class AgileEncoder(nn.Module):
         # inversion loss
         losses_dict['rec_loss'] = self.rec_loss(outputs_dict["real_imgs"], img_gen)
         losses_dict['id_loss'] = self.id_loss(outputs_dict["real_imgs"], img_gen)
-        # losses_dict['perceptual_loss'] = self.perceptual_loss(outputs_dict["real_imgs"],outputs_dict["restore_imgs"])
-        # losses_dict['kl_loss'] = self.kl_loss(outputs_dict["logvar"],outputs_dict["mu"])
+        losses_dict['perceptual_loss'] = self.perceptual_loss(outputs_dict["real_imgs"],outputs_dict["restore_imgs"])
+        losses_dict['kl_loss'] = self.kl_loss(outputs_dict["logvar"],outputs_dict["mu"])
 
         loss, log_var = self._parse_losses(losses_dict)
 
