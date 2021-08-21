@@ -16,5 +16,5 @@ class KLloss(nn.Module):
         dim = logvar.shape[-1]
         logvar = logvar.view(-1, dim)
         mu = mu.view(-1, dim)
-        loss = torch.mean(0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp(), dim = 1), dim = 0)
+        loss = torch.mean(-0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp(), dim = 1), dim = 0)
         return loss * self.loss_weight
