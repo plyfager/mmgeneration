@@ -13,8 +13,8 @@ class KLloss(nn.Module):
         self.loss_weight = loss_weight
         
     def forward(self, logvar, mu):
-        batch = logvar.shape[0]
-        logvar = logvar.view(batch, -1)
-        mu = mu.view(batch, -1)
+        dim = logvar.shape[-1]
+        logvar = logvar.view(-1, dim)
+        mu = mu.view(-1, dim)
         loss = torch.mean(0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp(), dim = 1), dim = 0)
         return loss * self.loss_weight
