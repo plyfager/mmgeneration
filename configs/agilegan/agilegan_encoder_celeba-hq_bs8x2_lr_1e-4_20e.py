@@ -4,7 +4,7 @@ _base_ = [
 ]
 
 optimizer = dict(
-    encoder=dict(type='Adam', lr=0.0001, betas=(0.0, 0.999)))
+    encoder=dict(type='Adam', lr=0.001, betas=(0.0, 0.999)))
 
 # define dataset
 # you must set `samples_per_gpu`
@@ -31,7 +31,7 @@ log_config = dict(
         dict(type='TextLoggerHook')
     ])
 # 30000 images in celeba-hq
-total_iters = 19000
+total_iters = 37500
 
 # use ddp wrapper for faster training
 use_ddp_wrapper = True
