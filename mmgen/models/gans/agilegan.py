@@ -40,6 +40,7 @@ class AgileEncoder(nn.Module):
         self.encoder = build_module(encoder)
         self._decoder_cfg = deepcopy(decoder)
         self.decoder = build_module(decoder)
+        self.fixed_mlp = self.decoder.style_mapping
 
         self.train_cfg = deepcopy(train_cfg) if train_cfg else None
         self.test_cfg = deepcopy(test_cfg) if test_cfg else None
@@ -158,7 +159,7 @@ class AgileEncoder(nn.Module):
     def forward(self, x):
         code, logvar, mu = self.encoder(x)
         z_plus_code = code.view(-1, 512)
-        w_plus_code = self.decoder.style_mapping(z_plus_code)
+        w_plus_code = self.fixed_mlp(z_plus_code)
         w_plus_code = w_plus_code.view(-1, 18, 512)
         w_plus_code = w_plus_code.unbind(dim=1)
         rec_x = self.decoder(w_plus_code, input_is_latent=True)
@@ -271,7 +272,6 @@ class AgileTransfer(StaticUnconditionalGAN):
         self.perceptual_loss = build_module(perceptual_loss)
         set_requires_grad(self.source_generator, False)
         self.fixed_mlp = deepcopy(self.generator.style_mapping)
-        # set_requires_grad(self.generator.style_mapping, False)
 
     def forward(self, x):
         return dict(
@@ -280,7 +280,7 @@ class AgileTransfer(StaticUnconditionalGAN):
 
     def latent_generator(self, batch_size):
         z_plus_code = torch.randn(batch_size*18, 512)
-        w_plus_code = self.generator.style_mapping(z_plus_code)
+        w_plus_code = self.fixed_mlp(z_plus_code)
         w_plus_code = w_plus_code.view(-1, 18, 512)
         w_plus_code = w_plus_code.unbind(dim=1)
         return w_plus_code
@@ -480,7 +480,7 @@ class AgileTransfer(StaticUnconditionalGAN):
             # loss_scaler.update will be called in runner.train()
         else:
             optimizer['generator'].step()
-        self.generator.style_mapping = deepcopy(self.fixed_mlp)
+        self.generator.module.style_mapping.load_state_dict(self.fixed_mlp.state_dict())
 
         log_vars = {}
         log_vars.update(log_vars_g)
