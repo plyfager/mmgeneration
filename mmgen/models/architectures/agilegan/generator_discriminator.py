@@ -1,26 +1,28 @@
-import torch.nn as nn
-from .modules import get_blocks
-from .modules import bottleneck_IR_SE, SubBlock
-import torch.nn.functional as F
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 from mmgen.models.builder import MODULES
+from .modules import SubBlock, bottleneck_IR_SE, get_blocks
+
 
 @MODULES.register_module()
 class VAEStyleEncoder(nn.Module):
-    def __init__(self, num_layers, input_nc=3,pretrained=None):
+
+    def __init__(self, num_layers, input_nc=3, pretrained=None):
         super(VAEStyleEncoder, self).__init__()
         assert num_layers in [50, 100, 152]
         blocks = get_blocks(num_layers)
         unit_module = bottleneck_IR_SE
-        self.input_layer = nn.Sequential(nn.Conv2d(input_nc, 64, (3, 3), 1, 1, bias=False),
-                                      nn.BatchNorm2d(64),
-                                      nn.PReLU(64))
+        self.input_layer = nn.Sequential(
+            nn.Conv2d(input_nc, 64, (3, 3), 1, 1, bias=False),
+            nn.BatchNorm2d(64), nn.PReLU(64))
         modules = []
         for block in blocks:
             for bottleneck in block:
-                modules.append(unit_module(bottleneck.in_channel,
-                                           bottleneck.depth,
-                                           bottleneck.stride))
+                modules.append(
+                    unit_module(bottleneck.in_channel, bottleneck.depth,
+                                bottleneck.stride))
         self.body = nn.Sequential(*modules)
 
         self.styles = nn.ModuleList()
@@ -35,9 +37,10 @@ class VAEStyleEncoder(nn.Module):
             else:
                 style = SubBlock(512, 512, 64)
             self.styles.append(style)
-        self.latlayer1 = nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0)
-        self.latlayer2 = nn.Conv2d(128, 512, kernel_size=1, stride=1, padding=0)
-
+        self.latlayer1 = nn.Conv2d(
+            256, 512, kernel_size=1, stride=1, padding=0)
+        self.latlayer2 = nn.Conv2d(
+            128, 512, kernel_size=1, stride=1, padding=0)
 
         self.fc_mu = nn.Linear(512, 512)
         self.fc_var = nn.Linear(512, 512)
@@ -62,7 +65,8 @@ class VAEStyleEncoder(nn.Module):
 
     def _upsample_add(self, x, y):
         _, _, H, W = y.size()
-        return F.interpolate(x, size=(H, W), mode='bilinear', align_corners=True) + y
+        return F.interpolate(
+            x, size=(H, W), mode='bilinear', align_corners=True) + y
 
     def forward(self, x):
         x = self.input_layer(x)
@@ -96,3 +100,8 @@ class VAEStyleEncoder(nn.Module):
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return eps * std + mu, logvar, mu
+
+
+# @MODULES.register_module()
+# class DualGenerator(nn.Module):
+#     # TODO:

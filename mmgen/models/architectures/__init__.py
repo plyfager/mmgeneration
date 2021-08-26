@@ -33,6 +33,6 @@ __all__ = [
     'generation_init_weights', 'PatchDiscriminator', 'ResnetGenerator',
     'PerceptualLoss', 'WGANGPDiscriminator', 'WGANGPGenerator',
     'LSGANDiscriminator', 'LSGANGenerator', 'ProjDiscriminator',
-    'SNGANGenerator', 'BigGANGenerator', 'SNConvModule', 'VAEStyleEncoder', 
+    'SNGANGenerator', 'BigGANGenerator', 'SNConvModule', 'VAEStyleEncoder',
     'BigGANDiscriminator', 'BigGANDeepGenerator', 'BigGANDeepDiscriminator'
 ]

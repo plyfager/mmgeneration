@@ -1,4 +1,4 @@
-from .agilegan import AgileEncoder
+from .agilegan import AgileEncoder, AgileTransfer
 from .base_gan import BaseGAN
 from .basic_conditional_gan import BasicConditionalGAN
 from .cyclegan import CycleGAN
@@ -11,5 +11,5 @@ from .static_unconditional_gan import StaticUnconditionalGAN
 __all__ = [
     'BaseGAN', 'StaticUnconditionalGAN', 'ProgressiveGrowingGAN', 'SinGAN',
     'Pix2Pix', 'CycleGAN', 'MSPIEStyleGAN2', 'PESinGAN', 'BasicConditionalGAN',
-    'AgileEncoder'
+    'AgileEncoder', 'AgileTransfer'
 ]

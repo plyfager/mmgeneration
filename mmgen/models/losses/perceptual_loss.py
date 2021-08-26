@@ -8,7 +8,6 @@ from mmgen.utils import get_root_logger
 from ..builder import MODULES
 
 
-
 class PerceptualVGG(nn.Module):
     """VGG network used in calculating perceptual loss.
 

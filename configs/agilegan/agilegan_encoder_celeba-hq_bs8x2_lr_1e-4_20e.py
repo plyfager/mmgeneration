@@ -1,19 +1,17 @@
 _base_ = [
-    '../_base_/models/agile_encoder.py', '../_base_/datasets/unconditional_imgs_flip_256x256.py',
+    '../_base_/models/agile_encoder.py',
+    '../_base_/datasets/unconditional_imgs_flip_256x256.py',
     '../_base_/default_runtime.py'
 ]
 
-optimizer = dict(
-    encoder=dict(type='Adam', lr=0.001, betas=(0.0, 0.999)))
+optimizer = dict(encoder=dict(type='Adam', lr=0.0001, betas=(0.0, 0.999)))
 
 # define dataset
 # you must set `samples_per_gpu`
 # `samples_per_gpu` and `imgs_root` need to be set.
 imgs_root = 'data/imgs_256'
 data = dict(
-    samples_per_gpu=8,
-    workers_per_gpu=4,
-    train=dict(imgs_root=imgs_root))
+    samples_per_gpu=8, workers_per_gpu=4, train=dict(imgs_root=imgs_root))
 
 # adjust running config
 lr_config = None
@@ -22,14 +20,10 @@ custom_hooks = [
     dict(
         type='MMGenVisualizationHook',
         output_dir='training_samples',
-        res_name_list=['real_imgs','downsample_imgs'],
-        interval=100)
+        res_name_list=['real_imgs', 'downsample_imgs'],
+        interval=1000)
 ]
-log_config = dict(
-    interval=100,
-    hooks=[
-        dict(type='TextLoggerHook')
-    ])
+log_config = dict(interval=100, hooks=[dict(type='TextLoggerHook')])
 # 30000 images in celeba-hq
 total_iters = 37500
 
