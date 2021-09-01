@@ -1,13 +1,13 @@
 _base_ = [
-    '../_base_/models/agile_transfer.py',
-    '../_base_/datasets/ffhq_flip.py',
+    '../_base_/models/agile_transfer_128x128.py',
+    '../_base_/datasets/unconditional_imgs_128x128.py',
     '../_base_/default_runtime.py'
 ]
 
 # define dataset
 # you must set `samples_per_gpu`
 # `samples_per_gpu` and `imgs_root` need to be set.
-imgs_root = 'data/selected_metface'
+imgs_root = 'data/selected_met/mixed'
 data = dict(
     samples_per_gpu=4, workers_per_gpu=4, train=dict(imgs_root=imgs_root))
 

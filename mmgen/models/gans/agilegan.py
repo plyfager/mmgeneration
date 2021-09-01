@@ -480,7 +480,7 @@ class AgileTransfer(StaticUnconditionalGAN):
             # loss_scaler.update will be called in runner.train()
         else:
             optimizer['generator'].step()
-        self.generator.module.style_mapping.load_state_dict(self.fixed_mlp.state_dict())
+        # self.generator.module.style_mapping.load_state_dict(self.fixed_mlp.state_dict())
 
         log_vars = {}
         log_vars.update(log_vars_g)
