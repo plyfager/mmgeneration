@@ -158,7 +158,7 @@ class AgileEncoder(nn.Module):
 
         return loss, log_var
 
-    def forward(self, x, test_mode=False):
+    def forward(self, x, test_mode=True):
         code, logvar, mu = self.encoder(x)
         if test_mode:
             code = mu
@@ -281,10 +281,9 @@ class AgileTransfer(StaticUnconditionalGAN):
             target_result=self.generator(x, input_is_latent=True))
 
     def latent_generator(self, batch_size):
-        z_plus_code = torch.randn(batch_size * 18, 512)
-        w_plus_code = self.fixed_mlp(z_plus_code)
-        w_plus_code = w_plus_code.view(-1, 18, 512)
-        w_plus_code = w_plus_code.unbind(dim=1)
+        z_plus_code = torch.randn(batch_size, 18, 512)
+        w_plus_code = [self.fixed_mlp(s) for s in z_plus_code]
+        w_plus_code = [torch.stack(w_plus_code, dim=0)]
         return w_plus_code
 
     def _get_gen_loss(self, outputs_dict):
