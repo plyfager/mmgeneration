@@ -1,6 +1,8 @@
+import mmcv
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from mmcv.runner.checkpoint import _load_checkpoint_with_prefix
 
 from mmgen.models.builder import MODULES
 from .modules import SubBlock, bottleneck_IR_SE, get_blocks

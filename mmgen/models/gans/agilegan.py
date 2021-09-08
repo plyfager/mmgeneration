@@ -14,14 +14,16 @@ from mmgen.models.misc import tensor2img
 from ..common import set_requires_grad
 from .static_unconditional_gan import StaticUnconditionalGAN
 
+
 def downsample_256(img):
     batch, channel, height, width = img.shape
     if height > 256:
         factor = height // 256
         img = img.reshape(batch, channel, height // factor, factor,
-                                    width // factor, factor)
+                          width // factor, factor)
         img = img.mean([3, 5])
     return img
+
 
 @MODELS.register_module()
 class AgileEncoder(nn.Module):
@@ -156,12 +158,15 @@ class AgileEncoder(nn.Module):
 
         return loss, log_var
 
-    def forward(self, x):
+    def forward(self, x, test_mode=False):
         code, logvar, mu = self.encoder(x)
-        z_plus_code = code.view(-1, 512)
-        w_plus_code = self.fixed_mlp(z_plus_code)
-        w_plus_code = w_plus_code.view(-1, 18, 512)
-        w_plus_code = w_plus_code.unbind(dim=1)
+        if test_mode:
+            code = mu
+        # FIXME:
+        # z_plus_code = code.view(-1, 512)
+        w_plus_code = [self.fixed_mlp(s) for s in code]
+        # w_plus_code = w_plus_code.view(-1, 18, 512)
+        # w_plus_code = w_plus_code.unbind(dim=1)
         rec_x = self.decoder(w_plus_code, input_is_latent=True)
         return rec_x, logvar, mu
 
@@ -279,18 +284,18 @@ class AgileTransfer(StaticUnconditionalGAN):
             target_result=self.generator(x, input_is_latent=True))
 
     def latent_generator(self, batch_size):
-        z_plus_code = torch.randn(batch_size*18, 512)
+        z_plus_code = torch.randn(batch_size * 18, 512)
         w_plus_code = self.fixed_mlp(z_plus_code)
         w_plus_code = w_plus_code.view(-1, 18, 512)
         w_plus_code = w_plus_code.unbind(dim=1)
         return w_plus_code
-    
+
     def _get_gen_loss(self, outputs_dict):
         # Construct losses dict. If you hope some items to be included in the
         # computational graph, you have to add 'loss' in its name. Otherwise,
         # items without 'loss' in their name will just be used to print
         # information.
-        # import ipdb 
+        # import ipdb
         # ipdb.set_trace()
         losses_dict = {}
         # gan loss
@@ -299,10 +304,12 @@ class AgileTransfer(StaticUnconditionalGAN):
             target_is_real=True,
             is_disc=False)
         # TODO: add modified LPIPS
-        source_results = self.source_generator(outputs_dict["latents"], input_is_latent=True)
+        source_results = self.source_generator(
+            outputs_dict['latents'], input_is_latent=True)
         resized_source_results = downsample_256(source_results)
         resized_target_results = downsample_256(outputs_dict['fake_imgs'])
-        losses_dict['loss_sim'] = self.perceptual_loss(gt=resized_source_results, x=resized_target_results)
+        losses_dict['loss_sim'] = self.perceptual_loss(
+            gt=resized_source_results, x=resized_target_results)
         # gen auxiliary loss
         if self.with_gen_auxiliary_loss:
             for loss_module in self.gen_auxiliary_losses:
@@ -319,8 +326,8 @@ class AgileTransfer(StaticUnconditionalGAN):
                     losses_dict[loss_module.loss_name()] = loss_
         loss, log_var = self._parse_losses(losses_dict)
 
-        return loss, log_var
-    
+        return loss, log_var, resized_source_results
+
     def train_step(self,
                    data_batch,
                    optimizer,
@@ -454,7 +461,8 @@ class AgileTransfer(StaticUnconditionalGAN):
             loss_scaler=loss_scaler,
             latents=latents)
 
-        loss_gen, log_vars_g = self._get_gen_loss(data_dict_)
+        loss_gen, log_vars_g, resized_source_results = self._get_gen_loss(
+            data_dict_)
 
         # prepare for backward in ddp. If you do not call this function before
         # back propagation, the ddp will not dynamically find the used params
@@ -486,13 +494,17 @@ class AgileTransfer(StaticUnconditionalGAN):
         log_vars.update(log_vars_g)
         log_vars.update(log_vars_disc)
 
-        results = dict(fake_imgs=fake_imgs.cpu(), real_imgs=real_imgs.cpu())
+        results = dict(
+            fake_imgs=fake_imgs.cpu(),
+            real_imgs=real_imgs.cpu(),
+            src_g_imgs=resized_source_results.cpu())
         outputs = dict(
             log_vars=log_vars, num_samples=batch_size, results=results)
 
         if hasattr(self, 'iteration'):
             self.iteration += 1
         return outputs
+
 
 # @MODELS.register_module()
 # class AgileTranslation

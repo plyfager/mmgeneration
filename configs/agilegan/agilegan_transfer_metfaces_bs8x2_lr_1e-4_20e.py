@@ -1,13 +1,12 @@
 _base_ = [
-    '../_base_/models/agile_transfer.py',
-    '../_base_/datasets/ffhq_flip.py',
+    '../_base_/models/agile_transfer.py', '../_base_/datasets/ffhq_flip.py',
     '../_base_/default_runtime.py'
 ]
 
 # define dataset
 # you must set `samples_per_gpu`
 # `samples_per_gpu` and `imgs_root` need to be set.
-imgs_root = 'data/selected_metface'
+imgs_root = 'data/selected_metface/mixed'
 data = dict(
     samples_per_gpu=4, workers_per_gpu=4, train=dict(imgs_root=imgs_root))
 
@@ -18,7 +17,7 @@ custom_hooks = [
     dict(
         type='MMGenVisualizationHook',
         output_dir='training_samples',
-        res_name_list=['real_imgs', 'downsample_imgs'],
+        res_name_list=['real_imgs', 'fake_imgs'],
         interval=100)
 ]
 log_config = dict(interval=100, hooks=[dict(type='TextLoggerHook')])

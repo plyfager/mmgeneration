@@ -1,7 +1,8 @@
 dataset_type = 'UnconditionalImageDataset'
 
 train_pipeline = [
-    dict(type='LoadImageFromFile',
+    dict(
+        type='LoadImageFromFile',
         key='real_img',
         io_backend='memcached',
         server_list_cfg='/mnt/lustre/share/memcached_client/server_list.conf',
