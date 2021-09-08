@@ -162,11 +162,8 @@ class AgileEncoder(nn.Module):
         code, logvar, mu = self.encoder(x)
         if test_mode:
             code = mu
-        # FIXME:
-        # z_plus_code = code.view(-1, 512)
         w_plus_code = [self.fixed_mlp(s) for s in code]
-        # w_plus_code = w_plus_code.view(-1, 18, 512)
-        # w_plus_code = w_plus_code.unbind(dim=1)
+        w_plus_code = [torch.stack(w_plus_code, dim=0)]
         rec_x = self.decoder(w_plus_code, input_is_latent=True)
         return rec_x, logvar, mu
 
