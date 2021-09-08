@@ -326,7 +326,7 @@ class AgileTransfer(StaticUnconditionalGAN):
                     losses_dict[loss_module.loss_name()] = loss_
         loss, log_var = self._parse_losses(losses_dict)
 
-        return loss, log_var, resized_source_results
+        return loss, log_var, source_results
 
     def train_step(self,
                    data_batch,
@@ -461,7 +461,7 @@ class AgileTransfer(StaticUnconditionalGAN):
             loss_scaler=loss_scaler,
             latents=latents)
 
-        loss_gen, log_vars_g, resized_source_results = self._get_gen_loss(
+        loss_gen, log_vars_g, source_results = self._get_gen_loss(
             data_dict_)
 
         # prepare for backward in ddp. If you do not call this function before
@@ -497,7 +497,7 @@ class AgileTransfer(StaticUnconditionalGAN):
         results = dict(
             fake_imgs=fake_imgs.cpu(),
             real_imgs=real_imgs.cpu(),
-            src_g_imgs=resized_source_results.cpu())
+            src_g_imgs=source_results.cpu())
         outputs = dict(
             log_vars=log_vars, num_samples=batch_size, results=results)
 
