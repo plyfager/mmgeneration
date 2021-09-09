@@ -380,7 +380,9 @@ class AgileTransfer(StaticUnconditionalGAN):
         optimizer['discriminator'].zero_grad()
         # TODO: add noise sampler to customize noise sampling
         with torch.no_grad():
-            fake_imgs = self.generator(None, num_batches=batch_size)
+            latents = self.latent_generator(batch_size)
+            fake_imgs = self.generator(latents, input_is_latent=True)
+            # fake_imgs = self.generator(None, num_batches=batch_size)
 
         # disc pred for fake imgs and real_imgs
         disc_pred_fake = self.discriminator(fake_imgs)
