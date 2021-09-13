@@ -41,7 +41,7 @@ def main():
     args = parse_args()
     model = init_model(
         args.config, checkpoint=None, device=args.device)
-    
+    model.eval()
     # Image Normalized
     # TODO: Put this part into test_pipeline in the future 
     img = cv2.imread(args.source_path)
@@ -64,11 +64,13 @@ def main():
     
     results = (results[:, [2, 1, 0]] + 1.) / 2.
     # show input
-    if args.show_input:
-        import torch.nn.functional as F
-        down_results = F.interpolate(results, (256, 256))
-        transformed_image = (transformed_image + 1.0) / 2
-        results = torch.cat([transformed_image, down_results], dim=0)
+    # import ipdb 
+    # ipdb.set_trace()
+    # if args.show_input:
+    #     import torch.nn.functional as F
+    #     down_results = F.interpolate(results, (256, 256))
+    #     transformed_image = (transformed_image + 1.0) / 2
+    #     results = torch.cat([transformed_image, down_results], dim=0)
     # save images
     mmcv.mkdir_or_exist(os.path.dirname(args.save_path))
     utils.save_image(results, args.save_path)
