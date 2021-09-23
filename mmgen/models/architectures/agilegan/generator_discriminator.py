@@ -2,7 +2,7 @@ import mmcv
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mmcv.runner.checkpoint import _load_checkpoint_with_prefix
+from mmcv.runner.checkpoint import _load_checkpoint_with_prefix, _load_checkpoint
 
 from mmgen.models.builder import MODULES
 from .modules import SubBlock, bottleneck_IR_SE, get_blocks
@@ -63,8 +63,11 @@ class VAEStyleEncoder(nn.Module):
                                prefix='',
                                map_location='cpu',
                                strict=True):
-        state_dict = _load_checkpoint_with_prefix(prefix, ckpt_path,
-                                                  map_location)
+        if prefix=='':
+            state_dict = torch.load(ckpt_path, map_location)
+        else:
+            state_dict = _load_checkpoint_with_prefix(prefix, ckpt_path,
+                                                    map_location)
         self.load_state_dict(state_dict, strict=strict)
         mmcv.print_log(f'Load pretrained model from {ckpt_path}', 'mmgen')
 
