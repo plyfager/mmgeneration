@@ -8,11 +8,11 @@ from .gen_auxiliary_loss import GeneratorPathRegularizer, gen_path_regularizer
 from .id_loss import IDLoss
 from .kl_loss import KLloss
 from .perceptual_loss import PerceptualLoss
-from .pixelwise_loss import L1Loss, MSELoss
+from .pixelwise_loss import L1Loss, MSELoss, gaussian_kld
 
 __all__ = [
     'GANLoss', 'DiscShiftLoss', 'disc_shift_loss', 'gradient_penalty_loss',
     'GradientPenaltyLoss', 'R1GradientPenalty', 'r1_gradient_penalty_loss',
     'GeneratorPathRegularizer', 'gen_path_regularizer', 'MSELoss', 'L1Loss',
-    'IDLoss', 'KLloss', 'PerceptualLoss'
+    'IDLoss', 'KLloss', 'PerceptualLoss', 'gaussian_kld'
 ]
