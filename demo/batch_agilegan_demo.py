@@ -44,13 +44,18 @@ def main():
     model.eval()
     # Image Normalized
     # TODO: Put this part into test_pipeline in the future 
+    ALReady = os.listdir(args.save_path)
     from tqdm import tqdm
     for filename in tqdm(os.listdir(args.source_path)):
+        if filename in ALReady:
+            continue
         img = cv2.imread(os.path.join(args.source_path, filename))
         assert img is not None
         normal = normal_image.Normal_Image()
         img = normal.run(img)
-        
+        if img is None:
+            print(filename, "is None")
+            continue
         T = transforms.Compose([
             transforms.Resize((256, 256)),
             transforms.ToTensor(),

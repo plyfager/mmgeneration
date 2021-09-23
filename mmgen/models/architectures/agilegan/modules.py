@@ -154,7 +154,7 @@ class SubBlock(Module):
             ]
         self.convs = nn.Sequential(*modules)
         self.linear = EqualizedLRLinearModule(
-            out_c, out_c, equalized_lr_cfg=dict(lr_mul=1.))
+            out_c, out_c, equalized_lr_cfg=dict(lr_mul=1., gain=1.))
 
     def forward(self, x):
         x = self.convs(x)

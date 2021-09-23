@@ -6,7 +6,10 @@ from mmcv.runner.checkpoint import _load_checkpoint_with_prefix
 
 from mmgen.models.builder import MODULES
 from .modules import SubBlock, bottleneck_IR_SE, get_blocks
+from ..pggan import PixelNorm
+from .styleganv2_modules import ConstantInput, EqualLinearActModule, ModulatedStyleConv, ModulatedToRGB
 
+import numpy as np
 
 @MODULES.register_module()
 class VAEStyleEncoder(nn.Module):
@@ -106,31 +109,45 @@ class VAEStyleEncoder(nn.Module):
 
 @MODULES.register_module()
 class DualGenerator(nn.Module):
-    def __init__(
-        self,
-        size,
-        style_dim,
-        n_mlp,
-        channel_multiplier=2,
-        blur_kernel=[1, 3, 3, 1],
-        lr_mlp=0.01,
-    ):
+    
+    def __init__(self,
+                 out_size,
+                 style_channels,
+                 num_mlps=8,
+                 channel_multiplier=2,
+                 blur_kernel=[1, 3, 3, 1],
+                 lr_mlp=0.01,
+                 default_style_mode='mix',
+                 eval_style_mode='single',
+                 mix_prob=0.9,
+                 num_fp16_scales=0,
+                 fp16_enabled=False,
+                 pretrained=None):
         super().__init__()
+        self.out_size = out_size
+        self.style_channels = style_channels
+        self.num_mlps = num_mlps
+        self.channel_multiplier = channel_multiplier
+        self.lr_mlp = lr_mlp
+        self._default_style_mode = default_style_mode
+        self.default_style_mode = default_style_mode
+        self.eval_style_mode = eval_style_mode
+        self.mix_prob = mix_prob
+        self.num_fp16_scales = num_fp16_scales
+        self.fp16_enabled = fp16_enabled
 
-        self.size = size
+        # define style mapping layers
+        mapping_layers = [PixelNorm()]
 
-        self.style_dim = style_dim
+        for _ in range(num_mlps):
+            mapping_layers.append(
+                EqualLinearActModule(
+                    style_channels,
+                    style_channels,
+                    equalized_lr_cfg=dict(lr_mul=lr_mlp, gain=1.),
+                    act_cfg=dict(type='fused_bias')))
 
-        layers = [PixelNorm()]
-
-        for i in range(n_mlp):
-            layers.append(
-                EqualLinear(
-                    style_dim, style_dim, lr_mul=lr_mlp, activation='fused_lrelu'
-                )
-            )
-
-        self.style = nn.Sequential(*layers)
+        self.style_mapping = nn.Sequential(*mapping_layers)
 
         self.channels = {
             4: 512,
@@ -144,14 +161,23 @@ class DualGenerator(nn.Module):
             1024: 16 * channel_multiplier,
         }
 
-        self.input = ConstantInput(self.channels[4])
-        self.conv1 = StyledConv(
-            self.channels[4], self.channels[4], 3, style_dim, blur_kernel=blur_kernel
-        )
-        self.to_rgb1 = ToRGB(self.channels[4], style_dim, upsample=False)
+        # constant input layer
+        self.constant_input = ConstantInput(self.channels[4])
+        # 4x4 stage
+        self.conv1 = ModulatedStyleConv(
+            self.channels[4],
+            self.channels[4],
+            kernel_size=3,
+            style_channels=style_channels,
+            blur_kernel=blur_kernel)
+        self.to_rgb1 = ModulatedToRGB(
+            self.channels[4],
+            style_channels,
+            upsample=False,
+            fp16_enabled=fp16_enabled)
 
-        self.log_size = int(math.log(size, 2))
-        self.num_layers = (self.log_size - 2) * 2 + 1
+        # generator backbone (8x8 --> higher resolutions)
+        self.log_size = int(np.log2(self.out_size))
 
         self.convsA = nn.ModuleList()
         self.to_rgbsA = nn.ModuleList()
@@ -162,197 +188,370 @@ class DualGenerator(nn.Module):
         self.convsC = nn.ModuleList()
         self.to_rgbsC = nn.ModuleList()
 
-
-        self.noises = nn.Module()
-
-        in_channel = self.channels[4]
-
-        for layer_idx in range(self.num_layers):
-            res = (layer_idx + 5) // 2
-            shape = [1, 1, 2 ** res, 2 ** res]
-            self.noises.register_buffer(f'noise_{layer_idx}', torch.randn(*shape))
-
-
+        in_channels_ = self.channels[4]
 
         for i in range(3, self.log_size + 1):
-            if(i<7):
+            
+            if i<7:
                 #A
-                out_channel = self.channels[2 ** i]
+                out_channels_ = self.channels[2**i]
+
+                # If `fp16_enabled` is True, all of layers will be run in auto
+                # FP16. In the case of `num_fp16_sacles` > 0, only partial
+                # layers will be run in fp16.
+                _use_fp16 = (self.log_size - i) < num_fp16_scales or fp16_enabled
+
                 self.convsA.append(
-                    StyledConv(
-                        in_channel,
-                        out_channel,
+                    ModulatedStyleConv(
+                        in_channels_,
+                        out_channels_,
                         3,
-                        style_dim,
+                        style_channels,
                         upsample=True,
                         blur_kernel=blur_kernel,
-                    )
-                )
+                        fp16_enabled=_use_fp16))
                 self.convsA.append(
-                    StyledConv(
-                        out_channel, out_channel, 3, style_dim, blur_kernel=blur_kernel
-                    )
-                )
-                self.to_rgbsA.append(ToRGB(out_channel, style_dim))
-                #B
-                self.convsB.append(
-                    StyledConv(
-                        in_channel,
-                        out_channel,
+                    ModulatedStyleConv(
+                        out_channels_,
+                        out_channels_,
                         3,
-                        style_dim,
+                        style_channels,
+                        upsample=False,
+                        blur_kernel=blur_kernel,
+                        fp16_enabled=_use_fp16))
+                self.to_rgbsA.append(
+                    ModulatedToRGB(
+                        out_channels_,
+                        style_channels,
+                        upsample=True,
+                        fp16_enabled=_use_fp16))  # set to global fp16
+                # B
+                self.convsB.append(
+                    ModulatedStyleConv(
+                        in_channels_,
+                        out_channels_,
+                        3,
+                        style_channels,
                         upsample=True,
                         blur_kernel=blur_kernel,
-                    )
-                )
+                        fp16_enabled=_use_fp16))
                 self.convsB.append(
-                    StyledConv(
-                        out_channel, out_channel, 3, style_dim, blur_kernel=blur_kernel
-                    )
-                )
-                self.to_rgbsB.append(ToRGB(out_channel, style_dim))
+                    ModulatedStyleConv(
+                        out_channels_,
+                        out_channels_,
+                        3,
+                        style_channels,
+                        upsample=False,
+                        blur_kernel=blur_kernel,
+                        fp16_enabled=_use_fp16))
+                self.to_rgbsB.append(
+                    ModulatedToRGB(
+                        out_channels_,
+                        style_channels,
+                        upsample=True,
+                        fp16_enabled=_use_fp16))  # set to global fp16 
             else:
-                out_channel = self.channels[2 ** i]
+                out_channels_ = self.channels[2**i]
                 self.convsC.append(
-                    StyledConv(
-                        in_channel,
-                        out_channel,
+                    ModulatedStyleConv(
+                        in_channels_,
+                        out_channels_,
                         3,
-                        style_dim,
+                        style_channels,
                         upsample=True,
                         blur_kernel=blur_kernel,
-                    )
-                )
+                        fp16_enabled=_use_fp16))
                 self.convsC.append(
-                    StyledConv(
-                        out_channel, out_channel, 3, style_dim, blur_kernel=blur_kernel
-                    )
-                )
-                self.to_rgbsC.append(ToRGB(out_channel, style_dim))
-            in_channel = out_channel
-        self.n_latent = self.log_size * 2 - 2
+                    ModulatedStyleConv(
+                        out_channels_,
+                        out_channels_,
+                        3,
+                        style_channels,
+                        upsample=False,
+                        blur_kernel=blur_kernel,
+                        fp16_enabled=_use_fp16))
+                self.to_rgbsC.append(
+                    ModulatedToRGB(
+                        out_channels_,
+                        style_channels,
+                        upsample=True,
+                        fp16_enabled=_use_fp16))  # set to global fp16
+            in_channels_ = out_channels_
 
-    def make_noise(self):
-        device = self.input.input.device
+        self.num_latents = self.log_size * 2 - 2
+        self.num_injected_noises = self.num_latents - 1
 
-        noises = [torch.randn(1, 1, 2 ** 2, 2 ** 2, device=device)]
+        # register buffer for injected noises
+        for layer_idx in range(self.num_injected_noises):
+            res = (layer_idx + 5) // 2
+            shape = [1, 1, 2**res, 2**res]
+            self.register_buffer(f'injected_noise_{layer_idx}',
+                                 torch.randn(*shape))
+
+        if pretrained is not None:
+            print(pretrained)
+            self._load_pretrained_model(**pretrained)
+
+    def _load_pretrained_model(self,
+                               ckpt_path,
+                               prefix='',
+                               map_location='cpu',
+                               strict=True):
+        state_dict = _load_checkpoint_with_prefix(prefix, ckpt_path,
+                                                  map_location)
+        self.load_state_dict(state_dict, strict=strict)
+        mmcv.print_log(f'Load pretrained model from {ckpt_path}', 'mmgen')
+
+    def train(self, mode=True):
+        if mode:
+            if self.default_style_mode != self._default_style_mode:
+                mmcv.print_log(
+                    f'Switch to train style mode: {self._default_style_mode}',
+                    'mmgen')
+            self.default_style_mode = self._default_style_mode
+
+        else:
+            if self.default_style_mode != self.eval_style_mode:
+                mmcv.print_log(
+                    f'Switch to evaluation style mode: {self.eval_style_mode}',
+                    'mmgen')
+            self.default_style_mode = self.eval_style_mode
+
+        return super(DualGenerator, self).train(mode)
+
+    def make_injected_noise(self):
+        """make noises that will be injected into feature maps.
+
+        Returns:
+            list[Tensor]: List of layer-wise noise tensor.
+        """
+        device = get_module_device(self)
+
+        noises = [torch.randn(1, 1, 2**2, 2**2, device=device)]
 
         for i in range(3, self.log_size + 1):
             for _ in range(2):
-                noises.append(torch.randn(1, 1, 2 ** i, 2 ** i, device=device))
+                noises.append(torch.randn(1, 1, 2**i, 2**i, device=device))
 
         return noises
 
-    def mean_latent(self, n_latent):
-        latent_in = torch.randn(
-            n_latent, self.style_dim, device=self.input.input.device
-        )
-        latent = self.style(latent_in).mean(0, keepdim=True)
+    def get_mean_latent(self, num_samples=4096, **kwargs):
+        """Get mean latent of W space in this generator.
 
-        return latent
+        Args:
+            num_samples (int, optional): Number of sample times. Defaults
+                to 4096.
 
-    def get_latent(self, input):
-        return self.style(input)
+        Returns:
+            Tensor: Mean latent of this generator.
+        """
+        return get_mean_latent(self, num_samples, **kwargs)
 
+    def style_mixing(self,
+                     n_source,
+                     n_target,
+                     inject_index=1,
+                     truncation_latent=None,
+                     truncation=0.7):
+        return style_mixing(
+            self,
+            n_source=n_source,
+            n_target=n_target,
+            inject_index=inject_index,
+            truncation=truncation,
+            truncation_latent=truncation_latent,
+            style_channels=self.style_channels)
 
-    def forward(
-        self,
-        styles,
-        return_latents=False,
-        inject_index=None,
-        truncation=1,
-        truncation_latent=None,
-        input_is_latent=False,
-        noise=None,
-        randomize_noise=True,
-    ):
-        if not input_is_latent:
-            styles = [self.style(s) for s in styles]
+    def forward(self,
+                styles,
+                num_batches=-1,
+                return_noise=False,
+                return_latents=False,
+                inject_index=None,
+                truncation=1,
+                truncation_latent=None,
+                input_is_latent=False,
+                injected_noise=None,
+                randomize_noise=True):
+        """Forward function.
 
-        if noise is None:
-            if randomize_noise:
-                noise = [None] * self.num_layers
-            else:
-                noise = [
-                    getattr(self.noises, f'noise_{i}') for i in range(self.num_layers)
+        This function has been integrated with the truncation trick. Please
+        refer to the usage of `truncation` and `truncation_latent`.
+
+        Args:
+            styles (torch.Tensor | list[torch.Tensor] | callable | None): In
+                StyleGAN2, you can provide noise tensor or latent tensor. Given
+                a list containing more than one noise or latent tensors, style
+                mixing trick will be used in training. Of course, You can
+                directly give a batch of noise through a ``torch.Tensor`` or
+                offer a callable function to sample a batch of noise data.
+                Otherwise, the ``None`` indicates to use the default noise
+                sampler.
+            num_batches (int, optional): The number of batch size.
+                Defaults to 0.
+            return_noise (bool, optional): If True, ``noise_batch`` will be
+                returned in a dict with ``fake_img``. Defaults to False.
+            return_latents (bool, optional): If True, ``latent`` will be
+                returned in a dict with ``fake_img``. Defaults to False.
+            inject_index (int | None, optional): The index number for mixing
+                style codes. Defaults to None.
+            truncation (float, optional): Truncation factor. Give value less
+                than 1., the truncation trick will be adopted. Defaults to 1.
+            truncation_latent (torch.Tensor, optional): Mean truncation latent.
+                Defaults to None.
+            input_is_latent (bool, optional): If `True`, the input tensor is
+                the latent tensor. Defaults to False.
+            injected_noise (torch.Tensor | None, optional): Given a tensor, the
+                random noise will be fixed as this input injected noise.
+                Defaults to None.
+            randomize_noise (bool, optional): If `False`, images are sampled
+                with the buffered noise tensor injected to the style conv
+                block. Defaults to True.
+
+        Returns:
+            torch.Tensor | dict: Generated image tensor or dictionary \
+                containing more data.
+        """
+        # receive noise and conduct sanity check.
+        if isinstance(styles, torch.Tensor):
+            assert styles.shape[1] == self.style_channels
+            styles = [styles]
+        elif mmcv.is_seq_of(styles, torch.Tensor):
+            for t in styles:
+                assert t.shape[-1] == self.style_channels
+        # receive a noise generator and sample noise.
+        elif callable(styles):
+            device = get_module_device(self)
+            noise_generator = styles
+            assert num_batches > 0
+            if self.default_style_mode == 'mix' and random.random(
+            ) < self.mix_prob:
+                styles = [
+                    noise_generator((num_batches, self.style_channels))
+                    for _ in range(2)
                 ]
+            else:
+                styles = [noise_generator((num_batches, self.style_channels))]
+            styles = [s.to(device) for s in styles]
+        # otherwise, we will adopt default noise sampler.
+        else:
+            device = get_module_device(self)
+            assert num_batches > 0 and not input_is_latent
+            if self.default_style_mode == 'mix' and random.random(
+            ) < self.mix_prob:
+                styles = [
+                    torch.randn((num_batches, self.style_channels))
+                    for _ in range(2)
+                ]
+            else:
+                styles = [torch.randn((num_batches, self.style_channels))]
+            styles = [s.to(device) for s in styles]
 
+        if not input_is_latent:
+            noise_batch = styles
+            styles = [self.style_mapping(s) for s in styles]
+        else:
+            noise_batch = None
+
+        if injected_noise is None:
+            if randomize_noise:
+                injected_noise = [None] * self.num_injected_noises
+            else:
+                injected_noise = [
+                    getattr(self, f'injected_noise_{i}')
+                    for i in range(self.num_injected_noises)
+                ]
+        # use truncation trick
         if truncation < 1:
             style_t = []
+            # calculate truncation latent on the fly
+            if truncation_latent is None and not hasattr(
+                    self, 'truncation_latent'):
+                self.truncation_latent = self.get_mean_latent()
+                truncation_latent = self.truncation_latent
+            elif truncation_latent is None and hasattr(self,
+                                                       'truncation_latent'):
+                truncation_latent = self.truncation_latent
 
             for style in styles:
-                style_t.append(
-                    truncation_latent + truncation * (style - truncation_latent)
-                )
+                style_t.append(truncation_latent + truncation *
+                               (style - truncation_latent))
 
             styles = style_t
-
+        # no style mixing
         if len(styles) < 2:
-            inject_index = self.n_latent
+            inject_index = self.num_latents
 
             if styles[0].ndim < 3:
                 latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
 
             else:
                 latent = styles[0]
-
+        # style mixing
         else:
             if inject_index is None:
-                inject_index = random.randint(1, self.n_latent - 1)
+                inject_index = random.randint(1, self.num_latents - 1)
 
             latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
-            latent2 = styles[1].unsqueeze(1).repeat(1, self.n_latent - inject_index, 1)
+            latent2 = styles[1].unsqueeze(1).repeat(
+                1, self.num_latents - inject_index, 1)
 
             latent = torch.cat([latent, latent2], 1)
 
-        out = self.input(latent)
-
-
-        out = self.conv1(out, latent[:, 0], noise=noise[0])
+        # 4x4 stage
+        out = self.constant_input(latent)
+        out = self.conv1(out, latent[:, 0], noise=injected_noise[0])
         skip = self.to_rgb1(out, latent[:, 1])
-
 
         #
         outA, outB = out.clone(),out.clone()
-        skipA, skipB = skip.clone(),skip.clone()
-        i = 1
-        for conv1, conv2, noise1, noise2, to_rgb in zip(
-            self.convsA[::2], self.convsA[1::2], noise[1::2], noise[2::2], self.to_rgbsA
-        ):
-            outA = conv1(outA, latent[:, i], noise=noise1)
-            outA = conv2(outA, latent[:, i + 1], noise=noise2)
-            skipA = to_rgb(outA, latent[:, i + 2], skipA)
-            i += 2
+        skipA, skipB = skip.clone(),skip.clone()        
+        _index = 1
 
-        i = 1
-        for conv1, conv2, noise1, noise2, to_rgb in zip(
-            self.convsB[::2], self.convsB[1::2], noise[1::2], noise[2::2], self.to_rgbsB
-        ):
-            outB = conv1(outB, latent[:, i], noise=noise1)
-            outB = conv2(outB, latent[:, i + 1], noise=noise2)
-            skipB = to_rgb(outB, latent[:, i + 2], skipB)
-            i += 2
+        # 8x8 ---> higher resolutions
+        for up_conv, conv, noise1, noise2, to_rgb in zip(
+                self.convsA[::2], self.convsA[1::2], injected_noise[1::2],
+                injected_noise[2::2], self.to_rgbsA):
+            outA = up_conv(outA, latent[:, _index], noise=noise1)
+            outA = conv(outA, latent[:, _index + 1], noise=noise2)
+            skipA = to_rgb(outA, latent[:, _index + 2], skipA)
+            _index += 2
+        
+        _index = 1
 
+        # 8x8 ---> higher resolutions
+        for up_conv, conv, noise1, noise2, to_rgb in zip(
+                self.convsB[::2], self.convsB[1::2], injected_noise[1::2],
+                injected_noise[2::2], self.to_rgbsB):
+            outB = up_conv(outB, latent[:, _index], noise=noise1)
+            outB = conv(outB, latent[:, _index + 1], noise=noise2)
+            skipB = to_rgb(outB, latent[:, _index + 2], skipB)
+            _index += 2
 
-        for conv1, conv2, noise1, noise2, to_rgb in zip(
-            self.convsC[::2], self.convsC[1::2], noise[1::2], noise[2::2], self.to_rgbsC
-        ):
-            outA = conv1(outA, latent[:, i], noise=noise1)
-            outA = conv2(outA, latent[:, i + 1], noise=noise2)
-            skipA = to_rgb(outA, latent[:, i + 2], skipA)
+        for up_conv, conv, noise1, noise2, to_rgb in zip(
+                self.convsC[::2], self.convsC[1::2], injected_noise[1::2],
+                injected_noise[2::2], self.to_rgbsC):
+            outA = up_conv(outA, latent[:, _index], noise=noise1)
+            outA = conv(outA, latent[:, _index + 1], noise=noise2)
+            skipA = to_rgb(outA, latent[:, _index + 2], skipA)
+            
+            outB = up_conv(outB, latent[:, _index], noise=noise1)
+            outB = conv(outB, latent[:, _index + 1], noise=noise2)
+            skipB = to_rgb(outB, latent[:, _index + 2], skipB)
+            _index += 2
+        # make sure the output image is torch.float32 to avoid RunTime Error
+        # in other modules
+        imgA = skipA.to(torch.float32)
+        imgB = skipB.to(torch.float32)
 
-            outB = conv1(outB, latent[:, i], noise=noise1)
-            outB = conv2(outB, latent[:, i + 1], noise=noise2)
-            skipB = to_rgb(outB, latent[:, i + 2], skipB)
-            i += 2
+        if return_latents or return_noise:
+            output_dict = dict(
+                fake_imgA=imgA,
+                fake_imgB=imgB,
+                latent=latent,
+                inject_index=inject_index,
+                noise_batch=noise_batch)
+            return output_dict
 
-
-        imageA = skipA
-        imageB = skipB
-
-        if return_latents:
-            return imageA,imageB, latent
-
-        else:
-            return imageA, imageB, None
+        return imgA, imgB
 

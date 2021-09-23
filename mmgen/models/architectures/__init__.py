@@ -1,4 +1,4 @@
-from .agilegan import VAEStyleEncoder
+from .agilegan import VAEStyleEncoder, DualGenerator
 from .biggan import (BigGANDeepDiscriminator, BigGANDeepGenerator,
                      BigGANDiscriminator, BigGANGenerator, SNConvModule)
 from .cyclegan import ResnetGenerator
@@ -34,5 +34,6 @@ __all__ = [
     'PerceptualLoss', 'WGANGPDiscriminator', 'WGANGPGenerator',
     'LSGANDiscriminator', 'LSGANGenerator', 'ProjDiscriminator',
     'SNGANGenerator', 'BigGANGenerator', 'SNConvModule', 'VAEStyleEncoder',
-    'BigGANDiscriminator', 'BigGANDeepGenerator', 'BigGANDeepDiscriminator'
+    'BigGANDiscriminator', 'BigGANDeepGenerator', 'BigGANDeepDiscriminator',
+    'DualGenerator'
 ]

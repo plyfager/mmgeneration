@@ -24,7 +24,7 @@ def parse_args():
     parser.add_argument(
         '--show-input',
         type=bool,
-        default=True,
+        default=False,
         help='Whether show input')
     parser.add_argument(
         '--device', type=str, default='cpu', help='CUDA device id')
@@ -33,6 +33,12 @@ def parse_args():
         type=str,
         default='./work_dirs/demos/agile_result.png',
         help='path to save image transfer result')
+    parser.add_argument(
+        '--out-channel-order',
+        type=str,
+        default='bgr',
+        choices=['bgr', 'rgb'],
+        help='channel order of output')
     args = parser.parse_args()
     return args
 
@@ -58,22 +64,21 @@ def main():
     
     transformed_image = transformed_image.unsqueeze(0).to(args.device).float()
     # rgb 012
-    input_image = transformed_image[:, [2, 1, 0]]
+    input_image = transformed_image
+    # input_image = transformed_image[:, [2, 1, 0]]
     
     results,_,_ = model(input_image, test_mode=True)
     
-    results = (results[:, [2, 1, 0]] + 1.) / 2.
-    # show input
-    # import ipdb 
-    # ipdb.set_trace()
-    # if args.show_input:
-    #     import torch.nn.functional as F
-    #     down_results = F.interpolate(results, (256, 256))
-    #     transformed_image = (transformed_image + 1.0) / 2
-    #     results = torch.cat([transformed_image, down_results], dim=0)
-    # save images
+    imageA = results[0]
+    imageB = results[1]
+    
+    if args.out_channel_order == 'bgr':
+        imageB = (imageB[:, [2, 1, 0]] + 1.) / 2.
+    else:
+        imageB = (imageB + 1.) / 2.
+        
     mmcv.mkdir_or_exist(os.path.dirname(args.save_path))
-    utils.save_image(results, args.save_path)
+    utils.save_image(imageB, args.save_path, normalize=True)
 
 
 if __name__ == '__main__':

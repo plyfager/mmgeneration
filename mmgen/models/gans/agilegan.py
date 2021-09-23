@@ -158,7 +158,7 @@ class AgileEncoder(nn.Module):
 
         return loss, log_var
 
-    def forward(self, x, test_mode=True):
+    def forward(self, x, test_mode=False):
         code, logvar, mu = self.encoder(x)
         if test_mode:
             code = mu
