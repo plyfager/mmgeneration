@@ -4,8 +4,6 @@ _base_ = [
     '../_base_/default_runtime.py'
 ]
 
-optimizer = dict(encoder=dict(type='Adam', lr=0.0001, betas=(0.0, 0.999)))
-
 # define dataset
 # you must set `samples_per_gpu`
 # `samples_per_gpu` and `imgs_root` need to be set.
