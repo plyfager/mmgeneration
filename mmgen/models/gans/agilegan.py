@@ -135,13 +135,7 @@ class AgileEncoder(nn.Module):
         losses_dict = {}
 
         img_gen = outputs_dict['restore_imgs']
-        batch, channel, height, width = img_gen.shape
-        if height > 256:
-            factor = height // 256
-
-            img_gen = img_gen.reshape(batch, channel, height // factor, factor,
-                                      width // factor, factor)
-            img_gen = img_gen.mean([3, 5])
+        img_gen = self.face_pool(img_gen)
         # inversion loss
         losses_dict['rec_loss'] = self.rec_loss(outputs_dict['real_imgs'],
                                                 img_gen)
