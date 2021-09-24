@@ -1,15 +1,17 @@
 import mmcv
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mmcv.runner.checkpoint import _load_checkpoint_with_prefix, _load_checkpoint
+from mmcv.runner.checkpoint import (_load_checkpoint,
+                                    _load_checkpoint_with_prefix)
 
 from mmgen.models.builder import MODULES
-from .modules import SubBlock, bottleneck_IR_SE, get_blocks
 from ..pggan import PixelNorm
-from .styleganv2_modules import ConstantInput, EqualLinearActModule, ModulatedStyleConv, ModulatedToRGB
+from .modules import SubBlock, bottleneck_IR_SE, get_blocks
+from .styleganv2_modules import (ConstantInput, EqualLinearActModule,
+                                 ModulatedStyleConv, ModulatedToRGB)
 
-import numpy as np
 
 @MODULES.register_module()
 class VAEStyleEncoder(nn.Module):
@@ -63,11 +65,11 @@ class VAEStyleEncoder(nn.Module):
                                prefix='',
                                map_location='cpu',
                                strict=True):
-        if prefix=='':
+        if prefix == '':
             state_dict = torch.load(ckpt_path, map_location)
         else:
             state_dict = _load_checkpoint_with_prefix(prefix, ckpt_path,
-                                                    map_location)
+                                                      map_location)
         self.load_state_dict(state_dict, strict=strict)
         mmcv.print_log(f'Load pretrained model from {ckpt_path}', 'mmgen')
 
@@ -112,7 +114,7 @@ class VAEStyleEncoder(nn.Module):
 
 @MODULES.register_module()
 class DualGenerator(nn.Module):
-    
+
     def __init__(self,
                  out_size,
                  style_channels,
@@ -194,15 +196,16 @@ class DualGenerator(nn.Module):
         in_channels_ = self.channels[4]
 
         for i in range(3, self.log_size + 1):
-            
-            if i<7:
+
+            if i < 7:
                 #A
                 out_channels_ = self.channels[2**i]
 
                 # If `fp16_enabled` is True, all of layers will be run in auto
                 # FP16. In the case of `num_fp16_sacles` > 0, only partial
                 # layers will be run in fp16.
-                _use_fp16 = (self.log_size - i) < num_fp16_scales or fp16_enabled
+                _use_fp16 = (self.log_size -
+                             i) < num_fp16_scales or fp16_enabled
 
                 self.convsA.append(
                     ModulatedStyleConv(
@@ -252,7 +255,7 @@ class DualGenerator(nn.Module):
                         out_channels_,
                         style_channels,
                         upsample=True,
-                        fp16_enabled=_use_fp16))  # set to global fp16 
+                        fp16_enabled=_use_fp16))  # set to global fp16
             else:
                 out_channels_ = self.channels[2**i]
                 self.convsC.append(
@@ -507,8 +510,8 @@ class DualGenerator(nn.Module):
         skip = self.to_rgb1(out, latent[:, 1])
 
         #
-        outA, outB = out.clone(),out.clone()
-        skipA, skipB = skip.clone(),skip.clone()        
+        outA, outB = out.clone(), out.clone()
+        skipA, skipB = skip.clone(), skip.clone()
         _index = 1
 
         # 8x8 ---> higher resolutions
@@ -519,7 +522,7 @@ class DualGenerator(nn.Module):
             outA = conv(outA, latent[:, _index + 1], noise=noise2)
             skipA = to_rgb(outA, latent[:, _index + 2], skipA)
             _index += 2
-        
+
         _index = 1
 
         # 8x8 ---> higher resolutions
@@ -537,7 +540,7 @@ class DualGenerator(nn.Module):
             outA = up_conv(outA, latent[:, _index], noise=noise1)
             outA = conv(outA, latent[:, _index + 1], noise=noise2)
             skipA = to_rgb(outA, latent[:, _index + 2], skipA)
-            
+
             outB = up_conv(outB, latent[:, _index], noise=noise1)
             outB = conv(outB, latent[:, _index + 1], noise=noise2)
             skipB = to_rgb(outB, latent[:, _index + 2], skipB)
@@ -557,4 +560,3 @@ class DualGenerator(nn.Module):
             return output_dict
 
         return imgA, imgB
-

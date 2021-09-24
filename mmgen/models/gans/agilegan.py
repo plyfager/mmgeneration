@@ -16,7 +16,6 @@ from ..common import set_requires_grad
 from .static_unconditional_gan import StaticUnconditionalGAN
 
 
-
 @MODELS.register_module()
 class AgileEncoder(nn.Module):
 
@@ -52,13 +51,13 @@ class AgileEncoder(nn.Module):
             self.perceptual_loss = build_module(perceptual_loss)
         if kl_loss is not None:
             self.kl_loss = build_module(kl_loss)
-        
+
         ## build optimizer
         self._build_optimizer()
 
     def _build_optimizer(self):
         self.optimizer = Ranger(list(self.encoder.parameters()), lr=0.0001)
-    
+
     def _parse_train_cfg(self):
         """Parsing train config and set some attributes for training."""
         if self.train_cfg is None:
@@ -214,7 +213,7 @@ class AgileEncoder(nn.Module):
         optimizer['encoder'].step()
 
         # Add downsampled images
-        downsample_imgs = self.face_pool(restore_imgs) 
+        downsample_imgs = self.face_pool(restore_imgs)
 
         # skip generator training if only train discriminator for current
         # iteration
@@ -273,7 +272,7 @@ class AgileTransfer(StaticUnconditionalGAN):
         set_requires_grad(self.source_generator, False)
         self.fixed_mlp = deepcopy(self.generator.style_mapping)
         self.face_pool = torch.nn.AdaptiveAvgPool2d((256, 256))
-        
+
     def forward(self, x):
         return dict(
             source_result=self.source_generator(x, input_is_latent=True),
@@ -458,8 +457,7 @@ class AgileTransfer(StaticUnconditionalGAN):
             loss_scaler=loss_scaler,
             latents=latents)
 
-        loss_gen, log_vars_g, source_results = self._get_gen_loss(
-            data_dict_)
+        loss_gen, log_vars_g, source_results = self._get_gen_loss(data_dict_)
 
         # prepare for backward in ddp. If you do not call this function before
         # back propagation, the ddp will not dynamically find the used params

@@ -1,4 +1,4 @@
-from .agilegan import VAEStyleEncoder, DualGenerator
+from .agilegan import DualGenerator, VAEStyleEncoder
 from .biggan import (BigGANDeepDiscriminator, BigGANDeepGenerator,
                      BigGANDiscriminator, BigGANGenerator, SNConvModule)
 from .cyclegan import ResnetGenerator

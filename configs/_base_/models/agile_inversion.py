@@ -6,16 +6,16 @@ decoder_ckpt_prefix = 'generator_ema'
 model = dict(
     type='AgileEncoder',
     encoder=dict(
-        type='VAEStyleEncoder', 
+        type='VAEStyleEncoder',
         num_layers=50,
-        pretrained=dict(ckpt_path=encoder_ckpt_path, prefix=encoder_ckpt_prefix)
-        ),
+        pretrained=dict(
+            ckpt_path=encoder_ckpt_path, prefix=encoder_ckpt_prefix)),
     decoder=dict(
         type='StyleGANv2Generator',
         out_size=1024,
         style_channels=512,
-        pretrained=dict(ckpt_path=decoder_ckpt_path, prefix=decoder_ckpt_prefix)
-        ),
+        pretrained=dict(
+            ckpt_path=decoder_ckpt_path, prefix=decoder_ckpt_prefix)),
     id_loss=None,
     perceptual_loss=None,
     kl_loss=None)

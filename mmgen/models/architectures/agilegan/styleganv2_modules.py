@@ -714,7 +714,6 @@ class ModulatedStyleConv(nn.Module):
         self.noise_injector = NoiseInjection()
         self.activate = _FusedBiasLeakyReLU(out_channels)
 
-
     def forward(self, x, style, noise=None, return_noise=False):
         """Forward Function.
 
@@ -1038,7 +1037,6 @@ class ResBlock(nn.Module):
             act_cfg=None,
             bias=False,
             blur_kernel=blur_kernel)
-
 
     def forward(self, input):
         """Forward function.
