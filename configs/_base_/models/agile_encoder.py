@@ -30,5 +30,6 @@ model = dict(
         pretrained=('torchvision://vgg16')),
     kl_loss=dict(type='KLloss', loss_weight=5e-4))
 
+optimizer = None
 train_cfg = None
 test_cfg = None
