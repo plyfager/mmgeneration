@@ -1,3 +1,3 @@
 from .generator_discriminator import VAEStyleEncoder, DualGenerator
-
-__all__ = ['VAEStyleEncoder', 'DualGenerator']
+from .ranger import Ranger
+__all__ = ['VAEStyleEncoder', 'DualGenerator', 'Ranger']

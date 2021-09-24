@@ -11,18 +11,10 @@ import torch.nn.functional as F
 
 from mmgen.models.builder import MODELS, build_module
 from mmgen.models.misc import tensor2img
+from ..architectures.agilegan import Ranger
 from ..common import set_requires_grad
 from .static_unconditional_gan import StaticUnconditionalGAN
 
-
-def downsample_256(img):
-    batch, channel, height, width = img.shape
-    if height > 256:
-        factor = height // 256
-        img = img.reshape(batch, channel, height // factor, factor,
-                          width // factor, factor)
-        img = img.mean([3, 5])
-    return img
 
 
 @MODELS.register_module()
@@ -42,6 +34,7 @@ class AgileEncoder(nn.Module):
         self.encoder = build_module(encoder)
         self._decoder_cfg = deepcopy(decoder)
         self.decoder = build_module(decoder)
+        self.face_pool = torch.nn.AdaptiveAvgPool2d((256, 256))
         self.fixed_mlp = self.decoder.style_mapping
 
         self.train_cfg = deepcopy(train_cfg) if train_cfg else None
@@ -59,7 +52,13 @@ class AgileEncoder(nn.Module):
             self.perceptual_loss = build_module(perceptual_loss)
         if kl_loss is not None:
             self.kl_loss = build_module(kl_loss)
+        
+        ## build optimizer
+        self._build_optimizer()
 
+    def _build_optimizer(self):
+        self.optimizer = Ranger(list(self.encoder.parameters()), lr=0.0001)
+    
     def _parse_train_cfg(self):
         """Parsing train config and set some attributes for training."""
         if self.train_cfg is None:
@@ -191,7 +190,6 @@ class AgileEncoder(nn.Module):
         set_requires_grad(self.encoder, True)
         set_requires_grad(self.decoder, False)
         optimizer['encoder'].zero_grad()
-        # TODO: add noise sampler to customize noise sampling
         restore_imgs, logvar, mu = self.forward(real_imgs)
         # get data dict to compute losses for disc
         data_dict_ = dict(
@@ -216,7 +214,7 @@ class AgileEncoder(nn.Module):
         optimizer['encoder'].step()
 
         # Add downsampled images
-        downsample_imgs = F.interpolate(restore_imgs, (256, 256))
+        downsample_imgs = self.face_pool(restore_imgs) 
 
         # skip generator training if only train discriminator for current
         # iteration
@@ -274,7 +272,8 @@ class AgileTransfer(StaticUnconditionalGAN):
         self.perceptual_loss = build_module(perceptual_loss)
         set_requires_grad(self.source_generator, False)
         self.fixed_mlp = deepcopy(self.generator.style_mapping)
-
+        self.face_pool = torch.nn.AdaptiveAvgPool2d((256, 256))
+        
     def forward(self, x):
         return dict(
             source_result=self.source_generator(x, input_is_latent=True),
@@ -302,8 +301,8 @@ class AgileTransfer(StaticUnconditionalGAN):
         # TODO: add modified LPIPS
         source_results = self.source_generator(
             outputs_dict['latents'], input_is_latent=True)
-        resized_source_results = downsample_256(source_results)
-        resized_target_results = downsample_256(outputs_dict['fake_imgs'])
+        resized_source_results = self.face_pool(source_results)
+        resized_target_results = self.face_pool(outputs_dict['fake_imgs'])
         losses_dict['loss_sim'] = self.perceptual_loss(
             gt=resized_source_results, x=resized_target_results)
         # gen auxiliary loss

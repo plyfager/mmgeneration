@@ -6,7 +6,7 @@ prefix = 'generator_ema'
 model = dict(
     type='AgileEncoder',
     encoder=dict(type='VAEStyleEncoder', num_layers=50, 
-                 pretrained=dict(ckpt_path=encoder_pretrain_path, prefix='')),
+                 pretrained=dict(ckpt_path=encoder_pretrain_path, prefix='', strict=False)),
     decoder=dict(
         type='StyleGANv2Generator',
         out_size=1024,
@@ -29,6 +29,3 @@ model = dict(
 
 train_cfg = None
 test_cfg = None
-optimizer = dict(encoder=dict(type='Adam', lr=0.0001, betas=(0.0, 0.999)))
-# optimizer = dict(
-# encoder=dict(type='RAdam', lr=0.001, betas=(0.0, 0.999)))
