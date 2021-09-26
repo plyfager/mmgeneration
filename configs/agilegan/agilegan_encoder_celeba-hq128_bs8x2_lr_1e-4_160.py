@@ -7,9 +7,9 @@ _base_ = [
 # define dataset
 # you must set `samples_per_gpu`
 # `samples_per_gpu` and `imgs_root` need to be set.
-imgs_root = 'data/celeba16'
+imgs_root = 'data/celeba128'
 data = dict(
-    samples_per_gpu=8, workers_per_gpu=1, train=dict(imgs_root=imgs_root))
+    samples_per_gpu=8, workers_per_gpu=4, train=dict(imgs_root=imgs_root))
 
 # adjust running config
 lr_config = None
@@ -23,7 +23,7 @@ custom_hooks = [
 ]
 log_config = dict(interval=1, hooks=[dict(type='TextLoggerHook')])
 # 30000 images in celeba-hq
-total_iters = 37500
+total_iters = 160
 
 # use ddp wrapper for faster training
 use_ddp_wrapper = True
