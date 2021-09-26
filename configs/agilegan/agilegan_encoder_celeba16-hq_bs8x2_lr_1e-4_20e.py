@@ -9,7 +9,7 @@ _base_ = [
 # `samples_per_gpu` and `imgs_root` need to be set.
 imgs_root = 'data/celeba16'
 data = dict(
-    samples_per_gpu=8, workers_per_gpu=4, train=dict(imgs_root=imgs_root))
+    samples_per_gpu=8, workers_per_gpu=1, train=dict(imgs_root=imgs_root))
 
 # adjust running config
 lr_config = None
