@@ -21,7 +21,7 @@ custom_hooks = [
         res_name_list=['real_imgs', 'downsample_imgs'],
         interval=1000)
 ]
-log_config = dict(interval=100, hooks=[dict(type='TextLoggerHook')])
+log_config = dict(interval=1, hooks=[dict(type='TextLoggerHook')])
 # 30000 images in celeba-hq
 total_iters = 37500
 

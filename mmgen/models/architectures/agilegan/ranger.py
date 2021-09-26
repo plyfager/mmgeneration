@@ -147,7 +147,9 @@ class Ranger(Optimizer):
                 
                 # exp_avg_sq.mul_(beta2).addcmul_(grad, grad, 1 - beta2)
                 # compute mean moving avg
-                exp_avg.mul_(beta1).add_(1 - beta1, grad)
+                exp_avg = torch.mul(exp_avg, beta1)
+                exp_avg = exp_avg.add(grad, alpha=1-beta1)
+                # exp_avg.mul_(beta1).add_(1 - beta1, grad)
 
                 buffered = self.radam_buffer[int(state['step'] % 10)]
 
