@@ -7,7 +7,7 @@ _base_ = [
 # define dataset
 # you must set `samples_per_gpu`
 # `samples_per_gpu` and `imgs_root` need to be set.
-imgs_root = 'data/celeba1'
+imgs_root = 'data/celeba16'
 data = dict(
     samples_per_gpu=8, workers_per_gpu=4, train=dict(imgs_root=imgs_root))
 
