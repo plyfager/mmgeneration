@@ -71,7 +71,7 @@ class VAEStyleEncoder(nn.Module):
             state_dict = _load_checkpoint_with_prefix(prefix, ckpt_path,
                                                       map_location)
         self.load_state_dict(state_dict, strict=strict)
-        mmcv.print_log(f'Load pretrained model from {ckpt_path}', 'mmgen')
+        mmcv.print_log(f'VAEStyle Encoder Load pretrained model from {ckpt_path}', 'mmgen')
 
     def _upsample_add(self, x, y):
         _, _, H, W = y.size()
