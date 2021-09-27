@@ -4,10 +4,14 @@ _base_ = [
     '../_base_/default_runtime.py'
 ]
 
+use_ranger = True
+model = dict(use_ranger=use_ranger)
+optimizer = None if use_ranger else dict(encoder=dict(type='Adam', lr=0.0001, betas=(0.0, 0.999)))
+
 # define dataset
 # you must set `samples_per_gpu`
 # `samples_per_gpu` and `imgs_root` need to be set.
-imgs_root = 'data/celeba128'
+imgs_root = 'data/imgs_256'
 data = dict(
     samples_per_gpu=8, workers_per_gpu=4, train=dict(imgs_root=imgs_root))
 
@@ -19,11 +23,11 @@ custom_hooks = [
         type='MMGenVisualizationHook',
         output_dir='training_samples',
         res_name_list=['real_imgs', 'downsample_imgs'],
-        interval=1000)
+        interval=100)
 ]
-log_config = dict(interval=1, hooks=[dict(type='TextLoggerHook')])
+log_config = dict(interval=100, hooks=[dict(type='TextLoggerHook')])
 # 30000 images in celeba-hq
-total_iters = 160
+total_iters = 37500
 
 # use ddp wrapper for faster training
 use_ddp_wrapper = True

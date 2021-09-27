@@ -27,7 +27,8 @@ class AgileEncoder(nn.Module):
                  kl_loss=None,
                  train_cfg=None,
                  test_cfg=None,
-                 pretrained=None):
+                 pretrained=None,
+                 use_ranger=False):
         super().__init__()
         self._encoder_cfg = deepcopy(encoder)
         self.encoder = build_module(encoder)
@@ -53,7 +54,9 @@ class AgileEncoder(nn.Module):
             self.kl_loss = build_module(kl_loss)
 
         ## build optimizer
-        self._build_optimizer()
+        self.use_ranger = use_ranger
+        if use_ranger:
+            self._build_optimizer()
 
     def _build_optimizer(self):
         self.optimizer = Ranger(list(self.encoder.parameters()), lr=0.0001)
