@@ -59,7 +59,7 @@ class AgileEncoder(nn.Module):
             self._build_optimizer()
 
     def _build_optimizer(self):
-        self.optimizer = Ranger(list(self.encoder.parameters()), lr=0.0001)
+        self.optimizer = dict(encoder=Ranger(list(self.encoder.parameters()), lr=0.0001))
 
     def _parse_train_cfg(self):
         """Parsing train config and set some attributes for training."""
@@ -185,7 +185,7 @@ class AgileEncoder(nn.Module):
         # encoder training
         set_requires_grad(self.encoder, True)
         set_requires_grad(self.decoder, False)
-        optimizer.zero_grad()
+        optimizer['encoder'].zero_grad()
         restore_imgs, logvar, mu = self.forward(real_imgs)
         # get data dict to compute losses for disc
         data_dict_ = dict(
@@ -207,7 +207,7 @@ class AgileEncoder(nn.Module):
             ddp_reducer.prepare_for_backward(_find_tensors(loss_encoder))
 
         loss_encoder.backward()
-        optimizer.step()
+        optimizer['encoder'].step()
 
         # Add downsampled images
         downsample_imgs = self.face_pool(restore_imgs)
