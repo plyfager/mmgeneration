@@ -12,7 +12,9 @@ optimizer = None if use_ranger else dict(encoder=dict(type='Adam', lr=0.0001, be
 # `samples_per_gpu` and `imgs_root` need to be set.
 imgs_root = 'data/imgs_256'
 data = dict(
-    samples_per_gpu=8, workers_per_gpu=4, train=dict(imgs_root=imgs_root))
+    samples_per_gpu=8,
+    workers_per_gpu=4,
+    train=dict(dataset=dict(imgs_root=imgs_root)))
 
 # adjust running config
 lr_config = None
