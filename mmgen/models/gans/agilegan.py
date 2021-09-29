@@ -28,15 +28,21 @@ class AgileEncoder(nn.Module):
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
-                 use_ranger=False):
+                 use_ranger=False,
+                 start_from_mean_latent=False,
+                 learn_in_zplus=True):
         super().__init__()
         self._encoder_cfg = deepcopy(encoder)
         self.encoder = build_module(encoder)
         self._decoder_cfg = deepcopy(decoder)
         self.decoder = build_module(decoder)
+        self.mean_latent = self.decoder.get_mean_latent()
+        self.learn_in_zplus = learn_in_zplus
+        
         self.face_pool = torch.nn.AdaptiveAvgPool2d((256, 256))
         self.fixed_mlp = self.decoder.style_mapping
-
+        self.start_from_mean_latent = start_from_mean_latent
+        
         self.train_cfg = deepcopy(train_cfg) if train_cfg else None
         self.test_cfg = deepcopy(test_cfg) if test_cfg else None
 
@@ -155,9 +161,20 @@ class AgileEncoder(nn.Module):
 
     def forward(self, x, test_mode=False):
         code, logvar, mu = self.encoder(x)
+        
         if test_mode:
             code = mu
-        w_plus_code = [self.fixed_mlp(s) for s in code]
+            
+        if self.start_from_mean_latent:
+            delta_latent = self.mean_latent.repeat(18, 1)
+        else:
+            delta_latent = 0
+        
+        if self.learn_in_zplus:
+            w_plus_code = [self.fixed_mlp(s) + delta_latent for s in code]
+        else:
+            w_plus_code = [s + delta_latent for s in code]
+            
         w_plus_code = [torch.stack(w_plus_code, dim=0)]
         rec_x = self.decoder(w_plus_code, input_is_latent=True)
         return rec_x, logvar, mu

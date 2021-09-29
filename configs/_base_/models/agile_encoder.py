@@ -1,5 +1,5 @@
-encoder_pretrain_path = 'work_dirs/pre-trained/model_ir_se50.pth'
-ckpt_path = 'work_dirs/pre-trained/stylegan2_c2_ffhq_1024_b4x8_20210407_150045-618c9024.pth'
+encoder_pretrain_path = 'work_dirs/pre-trained/model_ir_se50_bgr.pth'
+ckpt_path = 'work_dirs/pre-trained/stylegan2-ffhq-config-f-official_20210327_171224-bce9310c.pth'
 facenet_path = 'work_dirs/pre-trained/model_ir_se50.pth'
 prefix = 'generator_ema'
 use_ranger=False
@@ -21,7 +21,8 @@ model = dict(
         type='LPIPS',
         loss_weight=0.8),
     kl_loss=dict(type='KLloss', loss_weight=5e-4),
-    use_ranger=use_ranger)
+    use_ranger=use_ranger,
+    start_from_mean_latent=True)
 
 optimizer = None if use_ranger else dict(encoder=dict(type='Adam', lr=0.0001, betas=(0.0, 0.999)))
 train_cfg = None
