@@ -136,6 +136,9 @@ class AgileEncoder(nn.Module):
 
         return loss, log_vars
 
+    def to_rgb(self, input_image):
+        return input_image[:, [2, 1, 0], ...]
+    
     def _get_encoder_loss(self, outputs_dict):
         # Construct losses dict. If you hope some items to be included in the
         # computational graph, you have to add 'loss' in its name. Otherwise,
@@ -145,13 +148,13 @@ class AgileEncoder(nn.Module):
 
         img_gen = outputs_dict['restore_imgs']
         img_gen = self.face_pool(img_gen)
+        
+        real_rgb = self.to_rgb(outputs_dict['real_imgs'])
+        fake_rgb = self.to_rgb(img_gen)
         # inversion loss
-        losses_dict['rec_loss'] = self.rec_loss(outputs_dict['real_imgs'],
-                                                img_gen)
-        losses_dict['id_loss'] = self.id_loss(outputs_dict['real_imgs'],
-                                              img_gen)
-        losses_dict['perceptual_loss'] = self.perceptual_loss(
-            outputs_dict['real_imgs'], img_gen)
+        losses_dict['rec_loss'] = self.rec_loss(real_rgb, fake_rgb)
+        losses_dict['id_loss'] = self.id_loss(real_rgb, fake_rgb)
+        losses_dict['perceptual_loss'] = self.perceptual_loss(real_rgb, fake_rgb)
         losses_dict['kl_loss'] = self.kl_loss(outputs_dict['logvar'],
                                               outputs_dict['mu'])
 

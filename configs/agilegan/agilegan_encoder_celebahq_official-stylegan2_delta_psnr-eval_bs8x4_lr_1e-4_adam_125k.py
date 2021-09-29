@@ -5,12 +5,13 @@ _base_ = [
 ]
 
 use_ranger = False
-model = dict(use_ranger=use_ranger, start_from_mean_latent=True)
+model = dict(use_ranger=use_ranger, start_from_mean_latent=False)
 optimizer = None if use_ranger else dict(encoder=dict(type='Adam', lr=0.0001, betas=(0.0, 0.999)))
 # define dataset
 # you must set `samples_per_gpu`
 # `samples_per_gpu` and `imgs_root` need to be set.
-train_imgs_root = '/mnt/lustre/share_data/xurui/ffhq/ffhq_imgs/ffhq_256'
+# train_imgs_root = '/mnt/lustre/share_data/xurui/ffhq/ffhq_imgs/ffhq_256'
+train_imgs_root = 'data/imgs_256'
 eval_imgs_root = '/mnt/lustre/yangyifei1/dataset/encoder1k'
 test_pipeline = [
     dict(type='LoadImageFromFile', key='real_img', io_backend='disk'),
@@ -38,7 +39,7 @@ custom_hooks = [
         type='MMGenVisualizationHook',
         output_dir='training_samples',
         res_name_list=['real_imgs', 'downsample_imgs'],
-        interval=100)
+        interval=200)
 ]
 log_config = dict(interval=100, hooks=[dict(type='TextLoggerHook')])
 # 30000 images in celeba-hq

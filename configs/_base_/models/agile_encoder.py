@@ -22,7 +22,7 @@ model = dict(
         loss_weight=0.8),
     kl_loss=dict(type='KLloss', loss_weight=5e-4),
     use_ranger=use_ranger,
-    start_from_mean_latent=True)
+    start_from_mean_latent=False)
 
 optimizer = None if use_ranger else dict(encoder=dict(type='Adam', lr=0.0001, betas=(0.0, 0.999)))
 train_cfg = None
