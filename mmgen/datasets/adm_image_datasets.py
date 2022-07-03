@@ -7,6 +7,8 @@ import torch.distributed as dist
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
+from .builder import DATASETS
+
 
 def load_data(*,
               data_dir,
@@ -138,15 +140,13 @@ class ImageDataset(Dataset):
         return np.transpose(arr, [2, 0, 1]), out_dict
 
 
+@DATASETS.register_module()
 class ADMImageDataset(Dataset):
 
     def __init__(
         self,
         resolution,
         data_dir,
-        classes=None,
-        shard=0,
-        num_shards=1,
         class_cond=False,
         random_crop=False,
         random_flip=True,
@@ -169,6 +169,7 @@ class ADMImageDataset(Dataset):
 
         self.local_images = all_files
         self.local_classes = None if classes is None else classes
+        self.random_crop = random_crop
         self.random_flip = random_flip
 
     def __len__(self):

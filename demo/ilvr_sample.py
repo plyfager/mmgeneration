@@ -23,7 +23,7 @@ def load_reference(data_dir,
                    batch_size,
                    image_size,
                    class_cond=False,
-                   dist=False):
+                   _dist=False):
     data = load_data(
         data_dir=data_dir,
         batch_size=batch_size,
@@ -31,7 +31,7 @@ def load_reference(data_dir,
         class_cond=class_cond,
         deterministic=True,
         random_flip=False,
-        dist=dist)
+        _dist=_dist)
     for large_batch, model_kwargs in data:
         model_kwargs["ref_img"] = large_batch
         yield model_kwargs
@@ -63,10 +63,11 @@ def main():
 
     # build models
 
-    model = init_model(
-        args.config, checkpoint=args.checkpoint, device=args.device)
-
+    model = init_model(args.config, checkpoint=None, device=args.device)
     diffusion = model.diffusion
+
+    model = model.model
+    model.load_state_dict(torch.load(args.checkpoint))
 
     if torch.cuda.is_available():
         model.cuda()
@@ -91,7 +92,7 @@ def main():
         args.batch_size,
         image_size=args.image_size,
         class_cond=args.class_cond,
-        dist=distributed)
+        _dist=distributed)
 
     logger.info("creating samples...")
     count = 0

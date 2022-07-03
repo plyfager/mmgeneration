@@ -1,10 +1,13 @@
+import functools
 import math
 from abc import abstractmethod
+from copy import deepcopy
 
 import numpy as np
 import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.parallel.distributed import _find_tensors
 
 from ..architectures.adm.fp16_util import (convert_module_to_f16,
                                            convert_module_to_f32)
@@ -13,9 +16,135 @@ from ..architectures.adm.modules import (AttentionBlock, Downsample, ResBlock,
 from ..architectures.adm.nn import (avg_pool_nd, checkpoint, conv_nd, linear,
                                     normalization, timestep_embedding,
                                     zero_module)
+from ..architectures.adm.resample import LossAwareSampler, UniformSampler
 from ..architectures.adm.script_util import create_gaussian_diffusion
 from ..builder import MODELS, build_module
 from ..common import set_requires_grad
+
+
+def log_loss_dict(diffusion, ts, losses):
+    loss_dict = dict()
+    for key, values in losses.items():
+        loss_dict[key] = values.mean().item()
+        # Log the quantiles (four quartiles, in particular).
+        for sub_t, sub_loss in zip(ts.cpu().numpy(),
+                                   values.detach().cpu().numpy()):
+            quartile = int(4 * sub_t / diffusion.num_timesteps)
+            loss_dict[f"{key}_q{quartile}"] = sub_loss
+    return loss_dict
+
+
+@MODELS.register_module()
+class ADM(nn.Module):
+
+    def __init__(self,
+                 *args,
+                 schedule_sampler=None,
+                 diffusion_cfg=dict(),
+                 train_cfg=dict(),
+                 test_cfg=dict(),
+                 **kwargs):
+        super().__init__()
+
+        # yyf: build diffusion inside model
+        self.model = UNetModel(*args, **kwargs)
+        if train_cfg.get('use_ema', False):
+            self.ema_module = deepcopy(self.model)
+        self.diffusion = create_gaussian_diffusion(**diffusion_cfg)
+        self.schedule_sampler = schedule_sampler or UniformSampler(
+            self.diffusion)
+
+    def train_step(self,
+                   data_batch,
+                   optimizer,
+                   ddp_reducer=None,
+                   loss_scaler=None,
+                   use_apex_amp=False,
+                   running_status=None):
+        # get data from data_batch
+        real_imgs, labels = data_batch
+        # If you adopt ddp, this batch size is local batch size for each GPU.
+        # If you adopt dp, this batch size is the global batch size as usual.
+        batch_size = real_imgs.shape[0]
+        self.microbatch = batch_size
+
+        # get running status
+        if running_status is not None:
+            curr_iter = running_status['iteration']
+        else:
+            # dirty walkround for not providing running status
+            if not hasattr(self, 'iteration'):
+                self.iteration = 0
+            curr_iter = self.iteration
+
+        # training
+        optimizer['model'].zero_grad()
+
+        loss, loss_dict = self.forward_backward(real_imgs, labels)
+
+        if ddp_reducer is not None:
+            ddp_reducer.prepare_for_backward(_find_tensors(loss))
+
+        if loss_scaler:
+            # add support for fp16
+            loss_scaler.scale(loss).backward()
+        elif use_apex_amp:
+            from apex import amp
+            with amp.scale_loss(
+                    loss, optimizer, loss_id=0) as scaled_loss_disc:
+                scaled_loss_disc.backward()
+        else:
+            loss.backward()
+
+        if loss_scaler:
+            loss_scaler.unscale_(optimizer)
+            # note that we do not contain clip_grad procedure
+            loss_scaler.step(optimizer)
+            # loss_scaler.update will be called in runner.train()
+        else:
+            optimizer['model'].step()
+
+        # skip generator training if only train discriminator for current
+        # iteration
+        results = dict(real_imgs=real_imgs.cpu())
+        outputs = dict(
+            log_vars=loss_dict, num_samples=batch_size, results=results)
+        if hasattr(self, 'iteration'):
+            self.iteration += 1
+        return outputs
+
+    def forward_backward(self, batch, cond):
+        for i in range(0, batch.shape[0], self.microbatch):
+            micro = batch[i:i + self.microbatch]
+            micro_cond = {k: v[i:i + self.microbatch] for k, v in cond.items()}
+            last_batch = (i + self.microbatch) >= batch.shape[0]
+            t, weights = self.schedule_sampler.sample(micro.shape[0],
+                                                      batch.device)
+
+            compute_losses = functools.partial(
+                self.diffusion.training_losses,
+                self.model,
+                micro,
+                t,
+                model_kwargs=micro_cond,
+            )
+
+            if last_batch:
+                losses = compute_losses()
+            else:
+                with self.model.no_sync():
+                    losses = compute_losses()
+
+            if isinstance(self.schedule_sampler, LossAwareSampler):
+                self.schedule_sampler.update_with_local_losses(
+                    t, losses["loss"].detach())
+
+            loss = (losses["loss"] * weights).mean()
+            loss_dict = log_loss_dict(
+                self.diffusion, t, {k: v * weights
+                                    for k, v in losses.items()})
+            # self.mp_trainer.backward(loss)
+            return loss, loss_dict
 
 
 @MODELS.register_module()
@@ -46,8 +175,8 @@ class UNetModel(nn.Module):
                                of heads for upsampling. Deprecated.
     :param use_scale_shift_norm: use a FiLM-like conditioning mechanism.
     :param resblock_updown: use residual blocks for up/downsampling.
-    :param use_new_attention_order: use a different attention pattern for potentially
-                                    increased efficiency.
+    :param use_new_attention_order: use a different attention pattern for 
+                                    potentially increased efficiency.
     """
 
     def __init__(self,
@@ -69,10 +198,7 @@ class UNetModel(nn.Module):
                  num_heads_upsample=-1,
                  use_scale_shift_norm=False,
                  resblock_updown=False,
-                 use_new_attention_order=False,
-                 diffusion_cfg=dict(),
-                 train_cfg=dict(),
-                 test_cfg=dict()):
+                 use_new_attention_order=False):
         super().__init__()
 
         if num_heads_upsample == -1:
@@ -235,9 +361,6 @@ class UNetModel(nn.Module):
             zero_module(conv_nd(dims, input_ch, out_channels, 3, padding=1)),
         )
 
-        # yyf: build diffusion inside model
-        self.diffusion = create_gaussian_diffusion(**diffusion_cfg)
-
     def convert_to_fp16(self):
         """
         Convert the torso of the model to float16.
@@ -285,174 +408,6 @@ class UNetModel(nn.Module):
             h = module(h, emb)
         h = h.type(x.dtype)
         return self.out(h)
-
-    def train_step(self,
-                   data_batch,
-                   optimizer,
-                   ddp_reducer=None,
-                   loss_scaler=None,
-                   use_apex_amp=False,
-                   running_status=None):
-        # get data from data_batch
-        real_imgs = data_batch[self.real_img_key]
-        # If you adopt ddp, this batch size is local batch size for each GPU.
-        # If you adopt dp, this batch size is the global batch size as usual.
-        batch_size = real_imgs.shape[0]
-
-        # get running status
-        if running_status is not None:
-            curr_iter = running_status['iteration']
-        else:
-            # dirty walkround for not providing running status
-            if not hasattr(self, 'iteration'):
-                self.iteration = 0
-            curr_iter = self.iteration
-
-        # disc training
-        set_requires_grad(self.discriminator, True)
-        optimizer['discriminator'].zero_grad()
-        # TODO: add noise sampler to customize noise sampling
-
-        # pass model specific training kwargs
-        g_training_kwargs = {}
-        if hasattr(self.generator, 'get_training_kwargs'):
-            g_training_kwargs.update(
-                self.generator.get_training_kwargs(phase='disc'))
-
-        with torch.no_grad():
-            fake_imgs = self.generator(
-                None, num_batches=batch_size, **g_training_kwargs)
-
-        # disc pred for fake imgs and real_imgs
-        disc_pred_fake = self.discriminator(fake_imgs)
-        disc_pred_real = self.discriminator(real_imgs)
-        # get data dict to compute losses for disc
-        data_dict_ = dict(
-            gen=self.generator,
-            disc=self.discriminator,
-            disc_pred_fake=disc_pred_fake,
-            disc_pred_real=disc_pred_real,
-            fake_imgs=fake_imgs,
-            real_imgs=real_imgs,
-            iteration=curr_iter,
-            batch_size=batch_size,
-            loss_scaler=loss_scaler)
-
-        loss_disc, log_vars_disc = self._get_disc_loss(data_dict_)
-
-        # prepare for backward in ddp. If you do not call this function before
-        # back propagation, the ddp will not dynamically find the used params
-        # in current computation.
-        if ddp_reducer is not None:
-            ddp_reducer.prepare_for_backward(_find_tensors(loss_disc))
-
-        if loss_scaler:
-            # add support for fp16
-            loss_scaler.scale(loss_disc).backward()
-        elif use_apex_amp:
-            from apex import amp
-            with amp.scale_loss(
-                    loss_disc, optimizer['discriminator'],
-                    loss_id=0) as scaled_loss_disc:
-                scaled_loss_disc.backward()
-        else:
-            loss_disc.backward()
-
-        if loss_scaler:
-            loss_scaler.unscale_(optimizer['discriminator'])
-            # note that we do not contain clip_grad procedure
-            loss_scaler.step(optimizer['discriminator'])
-            # loss_scaler.update will be called in runner.train()
-        else:
-            optimizer['discriminator'].step()
-
-        # skip generator training if only train discriminator for current
-        # iteration
-        if (curr_iter + 1) % self.disc_steps != 0:
-            results = dict(
-                fake_imgs=fake_imgs.cpu(), real_imgs=real_imgs.cpu())
-            outputs = dict(
-                log_vars=log_vars_disc,
-                num_samples=batch_size,
-                results=results)
-            if hasattr(self, 'iteration'):
-                self.iteration += 1
-            return outputs
-
-        # generator training
-        set_requires_grad(self.discriminator, False)
-        optimizer['generator'].zero_grad()
-
-        # TODO: add noise sampler to customize noise sampling
-
-        # pass model specific training kwargs
-        g_training_kwargs = {}
-        if hasattr(self.generator, 'get_training_kwargs'):
-            g_training_kwargs.update(
-                self.generator.get_training_kwargs(phase='gen'))
-
-        fake_imgs = self.generator(
-            None, num_batches=batch_size, **g_training_kwargs)
-        disc_pred_fake_g = self.discriminator(fake_imgs)
-
-        data_dict_ = dict(
-            gen=self.generator,
-            disc=self.discriminator,
-            fake_imgs=fake_imgs,
-            disc_pred_fake_g=disc_pred_fake_g,
-            iteration=curr_iter,
-            batch_size=batch_size,
-            loss_scaler=loss_scaler)
-
-        loss_gen, log_vars_g = self._get_gen_loss(data_dict_)
-
-        # prepare for backward in ddp. If you do not call this function before
-        # back propagation, the ddp will not dynamically find the used params
-        # in current computation.
-        if ddp_reducer is not None:
-            ddp_reducer.prepare_for_backward(_find_tensors(loss_gen))
-
-        if loss_scaler:
-            loss_scaler.scale(loss_gen).backward()
-        elif use_apex_amp:
-            from apex import amp
-            with amp.scale_loss(
-                    loss_gen, optimizer['generator'],
-                    loss_id=1) as scaled_loss_disc:
-                scaled_loss_disc.backward()
-        else:
-            loss_gen.backward()
-
-        if loss_scaler:
-            loss_scaler.unscale_(optimizer['generator'])
-            # note that we do not contain clip_grad procedure
-            loss_scaler.step(optimizer['generator'])
-            # loss_scaler.update will be called in runner.train()
-        else:
-            optimizer['generator'].step()
-
-        # update ada p
-        if hasattr(self.discriminator,
-                   'with_ada') and self.discriminator.with_ada:
-            self.discriminator.ada_aug.log_buffer[0] += batch_size
-            self.discriminator.ada_aug.log_buffer[1] += disc_pred_real.sign(
-            ).sum()
-            self.discriminator.ada_aug.update(
-                iteration=curr_iter, num_batches=batch_size)
-            log_vars_disc['augment'] = (
-                self.discriminator.ada_aug.aug_pipeline.p.data.cpu())
-
-        log_vars = {}
-        log_vars.update(log_vars_g)
-        log_vars.update(log_vars_disc)
-
-        results = dict(fake_imgs=fake_imgs.cpu(), real_imgs=real_imgs.cpu())
-        outputs = dict(
-            log_vars=log_vars, num_samples=batch_size, results=results)
-
-        if hasattr(self, 'iteration'):
-            self.iteration += 1
-        return outputs
 
 
 class SuperResModel(UNetModel):

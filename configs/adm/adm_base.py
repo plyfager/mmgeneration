@@ -8,11 +8,12 @@ diffusion_cfg = dict(
     rescale_timesteps=False,
     rescale_learned_sigmas=False,
 )
-
+class_cond = False
+NUM_CLASSES = 1000
 model = dict(
     type='UNetModel',
     image_size=64,
-    num_channels=128,
+    model_channels=128,
     num_res_blocks=2,
     num_heads=4,
     num_heads_upsample=-1,
@@ -20,7 +21,7 @@ model = dict(
     attention_resolutions="16,8",
     channel_mult="",
     dropout=0.0,
-    class_cond=False,
+    num_classes=(NUM_CLASSES if class_cond else None),
     use_checkpoint=False,
     use_scale_shift_norm=True,
     resblock_updown=False,

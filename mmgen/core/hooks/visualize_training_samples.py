@@ -108,3 +108,100 @@ class VisualizeUnconditionalSamples(Hook):
             osp.join(runner.work_dir, self.output_dir, filename),
             nrow=self.nrow,
             padding=self.padding)
+
+
+def dm_sample(model,
+              diffusion,
+              image_size,
+              batch_size=4,
+              class_cond=False,
+              num_classes=1000,
+              clip_denoised=True,
+              use_ddim=False):
+    model_kwargs = {}
+    if class_cond:
+        classes = torch.randint(
+            low=0,
+            high=num_classes,
+            size=(batch_size, ),
+            device=torch.device('cuda'))
+        model_kwargs["y"] = classes
+
+    sample_fn = (
+        diffusion.p_sample_loop
+        if not use_ddim else diffusion.ddim_sample_loop)
+    sample = sample_fn(
+        model,
+        (batch_size, 3, image_size, image_size),
+        clip_denoised=clip_denoised,
+        model_kwargs=model_kwargs,
+    )
+    return sample
+
+
+@HOOKS.register_module()
+class VisDMSamples(Hook):
+
+    def __init__(self,
+                 output_dir,
+                 image_size,
+                 batch_size=4,
+                 class_cond=False,
+                 num_classes=1000,
+                 clip_denoised=True,
+                 use_ddim=False,
+                 interval=-1,
+                 filename_tmpl='iter_{}.png',
+                 rerange=True,
+                 bgr2rgb=True,
+                 nrow=4,
+                 padding=0,
+                 kwargs=None):
+        self.output_dir = output_dir
+        self.interval = interval
+        self.filename_tmpl = filename_tmpl
+        self.bgr2rgb = bgr2rgb
+        self.nrow = nrow
+        self.padding = padding
+
+        self.image_size = image_size
+        self.batch_size = batch_size
+        self.class_cond = class_cond
+        self.num_classes = num_classes
+        self.clip_denoised = clip_denoised
+        self.use_ddim = use_ddim
+
+        self.kwargs = kwargs if kwargs is not None else dict()
+
+    @master_only
+    def after_train_iter(self, runner):
+        """The behavior after each train iteration.
+
+        Args:
+            runner (object): The runner.
+        """
+        if not self.every_n_iters(runner, self.interval):
+            return
+        # eval mode
+        runner.model.eval()
+        # no grad in sampling
+        with torch.no_grad():
+            sample = dm_sample(
+                runner.model.module.model_ema,
+                runner.model.module.diffusion,
+                image_size=self.image_size,
+                batch_size=self.batch_size,
+                class_cond=self.class_cond,
+                num_classes=self.num_classes,
+                clip_denoised=self.clip_denoised,
+                use_ddim=self.use_ddim)
+
+        # train mode
+        runner.model.train()
+        filename = self.filename_tmpl.format(runner.iter + 1)
+        mmcv.mkdir_or_exist(osp.join(runner.work_dir, self.output_dir))
+        save_image(
+            sample,
+            osp.join(runner.work_dir, self.output_dir, filename),
+            nrow=self.nrow,
+            padding=self.padding)
