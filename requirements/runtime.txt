@@ -6,3 +6,7 @@ scikit-image
 scipy
 tqdm
 yapf
+blobfile
+resizer
+keras
+tensorflow
