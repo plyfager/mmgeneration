@@ -9,7 +9,11 @@ from mmcv.runner import load_checkpoint
 from mmengine.logging import MMLogger
 
 from mmgen.models.builder import MODULES, build_module
-from .modules import EmbedSequential, TimeEmbedding
+from .modules import (DenoisingDownsample, DenoisingResBlock,
+                      DenoisingUpsample, EmbedSequential,
+                      MultiHeadAttentionBlock, TimeEmbedding,
+                      convert_module_to_f16, convert_module_to_f32,
+                      timestep_embedding)
 
 
 @MODULES.register_module()
@@ -391,6 +395,259 @@ class DenoisingUnet(nn.Module):
                 output_dict['label'] = label
 
         return output_dict
+
+    def init_weights(self, pretrained=None):
+        """Init weights for models.
+
+        We just use the initialization method proposed in the original paper.
+
+        Args:
+            pretrained (str, optional): Path for pretrained weights. If given
+                None, pretrained weights will not be loaded. Defaults to None.
+        """
+        if isinstance(pretrained, str):
+            logger = MMLogger.get_instance(name='mmgen')
+            load_checkpoint(self, pretrained, strict=False, logger=logger)
+        elif pretrained is None:
+            # As Improved-DDPM, we apply zero-initialization to
+            #   second conv block in ResBlock (keywords: conv_2)
+            #   the output layer of the Unet (keywords: 'out' but
+            #     not 'out_blocks')
+            #   projection layer in Attention layer (keywords: proj)
+            for n, m in self.named_modules():
+                if isinstance(m, nn.Conv2d) and ('conv_2' in n or
+                                                 ('out' in n
+                                                  and 'out_blocks' not in n)):
+                    constant_init(m, 0)
+                if isinstance(m, nn.Conv1d) and 'proj' in n:
+                    constant_init(m, 0)
+        else:
+            raise TypeError('pretrained must be a str or None but'
+                            f' got {type(pretrained)} instead.')
+
+
+@MODULES.register_module()
+class AdmUNetModel(nn.Module):
+    """"""
+
+    def __init__(self,
+                 image_size,
+                 in_channels,
+                 model_channels,
+                 out_channels,
+                 num_res_blocks,
+                 attention_resolutions,
+                 dropout=0,
+                 channel_mult=(1, 2, 4, 8),
+                 conv_resample=True,
+                 dims=2,
+                 num_classes=None,
+                 use_checkpoint=False,
+                 use_fp16=False,
+                 norm_cfg=dict(type='GN32', num_groups=32),
+                 act_cfg=dict(type='SiLU', inplace=False),
+                 num_heads=1,
+                 num_head_channels=-1,
+                 num_heads_upsample=-1,
+                 use_scale_shift_norm=False,
+                 resblock_updown=False,
+                 use_new_attention_order=False):
+        super().__init__()
+
+        if num_heads_upsample == -1:
+            num_heads_upsample = num_heads
+
+        self.image_size = image_size
+        self.in_channels = in_channels
+        self.model_channels = model_channels
+        self.out_channels = out_channels
+        self.num_res_blocks = num_res_blocks
+        self.attention_resolutions = attention_resolutions
+        self.dropout = dropout
+        self.channel_mult = channel_mult
+        self.conv_resample = conv_resample
+        self.num_classes = num_classes
+        self.use_checkpoint = use_checkpoint
+        self.dtype = torch.float16 if use_fp16 else torch.float32
+        self.num_heads = num_heads
+        self.num_head_channels = num_head_channels
+        self.num_heads_upsample = num_heads_upsample
+
+        time_embed_dim = model_channels * 4
+        self.time_embed = nn.Sequential(
+            nn.Linear(model_channels, time_embed_dim),
+            nn.SiLU(),
+            nn.Linear(time_embed_dim, time_embed_dim),
+        )
+
+        if self.num_classes is not None:
+            self.label_emb = nn.Embedding(num_classes, time_embed_dim)
+
+        ch = input_ch = int(channel_mult[0] * model_channels)
+        self.input_blocks = nn.ModuleList(
+            [EmbedSequential(nn.Conv2d(in_channels, ch, 3, padding=1))])
+        self._feature_size = ch
+        input_block_chans = [ch]
+        ds = 1
+        for level, mult in enumerate(channel_mult):
+            for _ in range(num_res_blocks):
+                layers = [
+                    DenoisingResBlock(
+                        ch,
+                        time_embed_dim,
+                        use_scale_shift_norm,
+                        dropout,
+                        out_channels=int(mult * model_channels),
+                        norm_cfg=norm_cfg)
+                ]
+                ch = int(mult * model_channels)
+                if ds in attention_resolutions:
+                    layers.append(
+                        MultiHeadAttentionBlock(
+                            ch,
+                            num_heads=num_heads,
+                            num_head_channels=num_head_channels,
+                            use_new_attention_order=use_new_attention_order,
+                            norm_cfg=norm_cfg))
+                self.input_blocks.append(EmbedSequential(*layers))
+                self._feature_size += ch
+                input_block_chans.append(ch)
+            if level != len(channel_mult) - 1:
+                out_ch = ch
+                self.input_blocks.append(
+                    EmbedSequential(
+                        DenoisingResBlock(
+                            ch,
+                            time_embed_dim,
+                            use_scale_shift_norm,
+                            dropout,
+                            out_channels=out_ch,
+                            norm_cfg=norm_cfg,
+                            down=True,
+                        ) if resblock_updown else DenoisingDownsample(
+                            ch, conv_resample, dims=dims, out_channels=out_ch))
+                )
+                ch = out_ch
+                input_block_chans.append(ch)
+                ds *= 2
+                self._feature_size += ch
+
+        self.middle_block = EmbedSequential(
+            DenoisingResBlock(
+                ch,
+                time_embed_dim,
+                use_scale_shift_norm,
+                dropout,
+                out_channels=ch,
+                norm_cfg=norm_cfg),
+            MultiHeadAttentionBlock(
+                ch,
+                num_heads=num_heads,
+                num_head_channels=num_head_channels,
+                use_new_attention_order=use_new_attention_order,
+                norm_cfg=norm_cfg),
+            DenoisingResBlock(
+                ch,
+                time_embed_dim,
+                use_scale_shift_norm,
+                dropout,
+                out_channels=ch,
+                norm_cfg=norm_cfg),
+        )
+        self._feature_size += ch
+
+        self.output_blocks = nn.ModuleList([])
+        for level, mult in list(enumerate(channel_mult))[::-1]:
+            for i in range(num_res_blocks + 1):
+                ich = input_block_chans.pop()
+                layers = [
+                    DenoisingResBlock(
+                        ch + ich,
+                        time_embed_dim,
+                        use_scale_shift_norm,
+                        dropout,
+                        out_channels=int(model_channels * mult),
+                        norm_cfg=norm_cfg)
+                ]
+                ch = int(model_channels * mult)
+                if ds in attention_resolutions:
+                    layers.append(
+                        MultiHeadAttentionBlock(
+                            ch,
+                            num_heads=num_heads_upsample,
+                            num_head_channels=num_head_channels,
+                            use_new_attention_order=use_new_attention_order,
+                            norm_cfg=norm_cfg))
+                if level and i == num_res_blocks:
+                    out_ch = ch
+                    layers.append(
+                        DenoisingResBlock(
+                            ch,
+                            time_embed_dim,
+                            use_scale_shift_norm,
+                            dropout,
+                            out_channels=out_ch,
+                            norm_cfg=norm_cfg,
+                            up=True,
+                        ) if resblock_updown else DenoisingUpsample(
+                            ch, conv_resample, dims=dims, out_channels=out_ch))
+                    ds //= 2
+                self.output_blocks.append(EmbedSequential(*layers))
+                self._feature_size += ch
+
+        self.out_act = nn.SiLU()
+        self.out = ConvModule(
+            in_channels=input_ch,
+            out_channels=out_channels,
+            kernel_size=3,
+            padding=1,
+            act_cfg=act_cfg,
+            norm_cfg=norm_cfg,
+            bias=True,
+            order=('norm', 'act', 'conv'))
+
+    def convert_to_fp16(self):
+        """Convert the torso of the model to float16."""
+        self.input_blocks.apply(convert_module_to_f16)
+        self.middle_block.apply(convert_module_to_f16)
+        self.output_blocks.apply(convert_module_to_f16)
+
+    def convert_to_fp32(self):
+        """Convert the torso of the model to float32."""
+        self.input_blocks.apply(convert_module_to_f32)
+        self.middle_block.apply(convert_module_to_f32)
+        self.output_blocks.apply(convert_module_to_f32)
+
+    def forward(self, x, timesteps, y=None):
+        """Apply the model to an input batch.
+
+        :param x: an [N x C x ...] Tensor of inputs.
+        :param timesteps: a 1-D batch of timesteps.
+        :param y: an [N] Tensor of labels, if class-conditional.
+        :return: an [N x C x ...] Tensor of outputs.
+        """
+        assert (y is not None) == (
+            self.num_classes is not None
+        ), 'must specify y if and only if the model is class-conditional'
+
+        hs = []
+        emb = self.time_embed(
+            timestep_embedding(timesteps, self.model_channels))
+
+        if self.num_classes is not None:
+            assert y.shape == (x.shape[0], )
+            emb = emb + self.label_emb(y)
+
+        h = x.type(self.dtype)
+        for module in self.input_blocks:
+            h = module(h, emb)
+            hs.append(h)
+        h = self.middle_block(h, emb)
+        for module in self.output_blocks:
+            h = torch.cat([h, hs.pop()], dim=1)
+            h = module(h, emb)
+        h = h.type(x.dtype)
+        return self.out(h)
 
     def init_weights(self, pretrained=None):
         """Init weights for models.
