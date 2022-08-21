@@ -1,4 +1,3 @@
-_base_ = [
     '../_base_/models/biggan/biggan_32x32.py',
     '../_base_/datasets/cifar10_noaug.py', '../_base_/default_runtime.py'
 ]
@@ -50,11 +49,10 @@ metrics = [
         inception_style='StyleGAN',
         sample_model='ema')
 ]
-# NOTE: config for save multi best checkpoints
-# default_hooks = dict(
-#     checkpoint=dict(
-#         save_best=['FID-Full-50k/fid', 'IS-50k/is'],
-#         rule=['less', 'greater']))
-default_hooks = dict(checkpoint=dict(save_best='FID-Full-50k/fid'))
+# save multi best checkpoints
+default_hooks = dict(
+    checkpoint=dict(
+        save_best=['FID-Full-50k/fid', 'IS-50k/is'], rule=['less', 'greater']))
+
 val_evaluator = dict(metrics=metrics)
 test_evaluator = dict(metrics=metrics)
