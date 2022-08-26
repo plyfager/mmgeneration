@@ -143,6 +143,7 @@ class DenoisingUnet(nn.Module):
                  dropout=0,
                  embedding_channels=-1,
                  num_classes=0,
+                 use_fp16=False,
                  channels_cfg=None,
                  output_cfg=dict(mean='eps', var='learned_range'),
                  norm_cfg=dict(type='GN', num_groups=32),
@@ -166,6 +167,7 @@ class DenoisingUnet(nn.Module):
         self.num_classes = num_classes
         self.num_timesteps = num_timesteps
         self.use_rescale_timesteps = use_rescale_timesteps
+        self.dtype = torch.float16 if use_fp16 else torch.float32
 
         self.output_cfg = deepcopy(output_cfg)
         self.mean_mode = self.output_cfg.get('mean', 'eps')
@@ -347,6 +349,7 @@ class DenoisingUnet(nn.Module):
             embedding = self.label_embedding(label) + embedding
 
         h, hs = x_t, []
+        h = h.type(self.dtype)
         # forward downsample blocks
         for block in self.in_blocks:
             h = block(h, embedding)
@@ -358,6 +361,7 @@ class DenoisingUnet(nn.Module):
         # forward upsample blocks
         for block in self.out_blocks:
             h = block(torch.cat([h, hs.pop()], dim=1), embedding)
+        h = h.type(x_t.dtype)
         outputs = self.out(h)
 
         output_dict = dict()

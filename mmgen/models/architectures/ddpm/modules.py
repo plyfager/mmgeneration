@@ -60,7 +60,7 @@ def convert_module_to_f32(layer):
             layer.bias.data = layer.bias.data.float()
 
 
-@ACTIVATION_LAYERS.register_module()
+@MODELS.register_module()
 class SiLU(nn.Module):
     r"""Applies the Sigmoid Linear Unit (SiLU) function, element-wise.
     The SiLU function is also known as the swish function.
@@ -146,7 +146,7 @@ class MultiHeadAttention(nn.Module):
     def init_weights(self):
         constant_init(self.proj, 0)
 
-
+@MODULES.register_module()
 class QKVAttentionLegacy(nn.Module):
     """A module which performs QKV attention.
 
@@ -176,7 +176,7 @@ class QKVAttentionLegacy(nn.Module):
         a = torch.einsum('bts,bcs->bct', weight, v)
         return a.reshape(bs, -1, length)
 
-
+@MODULES.register_module()
 class QKVAttention(nn.Module):
     """A module which performs QKV attention and splits in a different
     order."""
@@ -206,7 +206,7 @@ class QKVAttention(nn.Module):
                          v.reshape(bs * self.n_heads, ch, length))
         return a.reshape(bs, -1, length)
 
-
+@MODULES.register_module()
 class MultiHeadAttentionBlock(nn.Module):
     """An attention block that allows spatial positions to attend to each
     other.
